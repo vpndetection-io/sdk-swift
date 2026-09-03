@@ -1,0 +1,11 @@
+# SwiftPM build output and local state.
+.build/
+.swiftpm/
+Package.resolved.bak
+
+# Xcode.
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+*.hmap

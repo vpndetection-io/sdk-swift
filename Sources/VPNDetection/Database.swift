@@ -190,15 +190,23 @@ private func unexpected(_ output: some Sendable) -> VPNDetectionError {
     VPNDetectionError(kind: .serverError, message: "unexpected response: \(output)")
 }
 
+// Exhaustive rather than a two-way test, so a format added to the spec is a
+// compile error here instead of silently arriving as csvgz.
 extension Operations.DownloadDatabase.Input.Query.FormatPayload {
     init(_ format: DatasetFormat) {
-        self = format == .mmdb ? .mmdb : .csvgz
+        switch format {
+        case .csvgz: self = .csvgz
+        case .mmdb: self = .mmdb
+        }
     }
 }
 
 extension Operations.DatabaseChecksum.Input.Query.FormatPayload {
     init(_ format: DatasetFormat) {
-        self = format == .mmdb ? .mmdb : .csvgz
+        switch format {
+        case .csvgz: self = .csvgz
+        case .mmdb: self = .mmdb
+        }
     }
 }
 
@@ -228,7 +236,11 @@ extension LicensedDataset.Redistribution {
 
 extension DatasetFormatSize {
     init(_ wire: Components.Schemas.DatasetFormatSize) {
-        self.format = wire.format == .mmdb ? .mmdb : .csvgz
+        self.format =
+            switch wire.format {
+            case .csvgz: .csvgz
+            case .mmdb: .mmdb
+            }
         self.bytes = wire.bytes
     }
 }

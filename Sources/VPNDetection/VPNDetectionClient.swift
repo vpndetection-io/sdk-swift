@@ -126,7 +126,8 @@ public struct VPNDetectionClient: Sendable {
                 next += 1
             }
         }
-        // Cancellation before the group was primed would otherwise return keys
+        // Covers the one case no child can report: cancellation before the group
+        // was primed, where nothing ran and the result would otherwise be keys
         // with no outcome behind them.
         try Task.checkCancellation()
         return BatchResults(keys: keys, outcomes: outcomes)

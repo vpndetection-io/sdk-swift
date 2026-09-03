@@ -105,6 +105,11 @@ func withRetry<T>(_ retries: Int, _ operation: () async throws -> T) async throw
         do {
             return try await operation()
         } catch {
+            // A cancelled task must not be retried, and the failure it reports
+            // is the cancellation rather than whatever the transport made of
+            // it. Checking the task is more robust than matching on an error
+            // type the transport may have wrapped or renamed.
+            try Task.checkCancellation()
             let failure = VPNDetectionError.wrapping(error)
             guard attempt < retries, failure.isRetryable else {
                 throw failure

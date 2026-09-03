@@ -95,6 +95,36 @@ struct ClientTests {
         #expect(ContinuousClock.now - started >= .seconds(1))
     }
 
+    @Test("cancelling a lookup propagates rather than becoming a network failure")
+    func cancellingALookupPropagates() async throws {
+        let stub = StubTransport(StubTransport.answers(for: ["9.9.9.1"]), delay: .seconds(5))
+        // Retries OFF on purpose: with them on the backoff sleep is itself
+        // cancelled and the error escapes that way, so only a zero-retry client
+        // reaches the code that decides what a cancellation looks like.
+        let client = client(stub, cache: nil, retries: 0)
+
+        let call = Task { try await client.lookup("9.9.9.1") }
+        try await Task.sleep(for: .milliseconds(100))
+        call.cancel()
+
+        await #expect(throws: CancellationError.self) { try await call.value }
+    }
+
+    @Test("cancelling a batch propagates rather than becoming per-address failures")
+    func cancellingABatchPropagates() async throws {
+        let stub = StubTransport(
+            StubTransport.answers(for: Self.manyAddresses), delay: .seconds(5),
+        )
+        let client = client(stub, cache: nil, retries: 0)
+
+        let batch = Task { try await client.lookupBatch(Self.manyAddresses) }
+        try await Task.sleep(for: .milliseconds(100))
+        batch.cancel()
+
+        // A map of network errors would otherwise look like a completed batch.
+        await #expect(throws: CancellationError.self) { try await batch.value }
+    }
+
     @Test("isBogon is on the client and agrees with the standalone function")
     func isBogonIsOnTheClientAndAgrees() {
         let client = client(StubTransport())

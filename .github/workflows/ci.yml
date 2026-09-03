@@ -28,3 +28,18 @@ jobs:
       - uses: actions/checkout@v7
       - run: swift --version
       - run: swift test
+
+  # `swift build` only ever targets the host, so the declared iOS floor would be
+  # a claim nothing checks. This compiles the library for it.
+  # -skipPackagePluginValidation is required: the OpenAPI generator is a build
+  # plugin, and Xcode refuses to run an unvalidated one non-interactively.
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: |
+          xcodebuild build \
+            -scheme VPNDetection \
+            -destination 'generic/platform=iOS' \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO

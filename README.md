@@ -162,14 +162,26 @@ Note that `rateLimited` and `quotaExceeded` both arrive as HTTP 429 and are not 
 
 ### Database downloads
 
-If your key carries the `db.download` scope, the licensed datasets are available through `client.database`:
+If your key carries the `db.download` scope, the licensed datasets are available through `client.database`. `download` fetches one to a file, streaming it straight to disk so that nothing bigger than a chunk is ever held in memory:
 
 ```swift
 let datasets = try await client.database.list()
-let url = try await client.database.downloadURL(id: "vpn_ip_extended_v1", format: .mmdb)
+
+let written = try await client.database.download(
+    "vpn_ip_extended_v1", format: .mmdb,
+    to: URL(fileURLWithPath: "vpn_ip_extended_v1.mmdb"),
+)
+print("\(written) bytes")
 ```
 
-`downloadURL` returns a time-limited link rather than the bytes, so you choose how to transfer a file that can run to gigabytes.
+Or take the time-limited link and run the transfer yourself, or take a small dataset as bytes:
+
+```swift
+let url = try await client.database.downloadURL(id: "vpn_ip_extended_v1", format: .mmdb)
+let bytes = try await client.database.downloadBytes("cdn_ip_v1", format: .csvgz)
+```
+
+`downloadBytes` holds the whole file in memory, and the catalog runs from `cdn_ip_v1` at 10 KB to `resproxy_ip_90d_v1` at 1.79 GB, so use `download` for anything you have not measured.
 
 ### Supplying your own transport
 
@@ -181,7 +193,7 @@ import OpenAPIURLSession
 let client = VPNDetectionClient(options: .init(transport: URLSessionTransport()))
 ```
 
-One thing to know if you do: the download endpoint answers `302` and the library hands you that link rather than the bytes, so a transport that follows redirects would read a whole dataset into memory. Configure yours not to. The library refuses such a response rather than reading it, but the transfer has already started by then.
+One thing to know if you do: the download endpoint answers `302`, and the library follows that redirect itself as a second request rather than letting the transport do it, so a transport that follows redirects would read a whole dataset into memory before the library ever saw the link. Configure yours not to. The library refuses such a response rather than reading it, but the transfer has already started by then.
 
 ## Other Libraries
 

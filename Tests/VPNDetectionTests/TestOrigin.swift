@@ -18,6 +18,8 @@ final class TestOrigin: Sendable {
         var body: [UInt8] = []
         /// Leave false to stall after the body, promising more that never comes.
         var complete: Bool = true
+        /// Drop the connection after the body, so a promised length never arrives.
+        var closeAfterBody: Bool = false
     }
 
     let port: Int
@@ -26,6 +28,9 @@ final class TestOrigin: Sendable {
     private let log: RequestLog
 
     var receivedPaths: [String] { log.paths }
+    /// The `Authorization` header of every request, so "the key never left the
+    /// API" is asserted at the wire rather than inferred from the code.
+    var receivedAuthorizations: [String?] { log.authorizations }
 
     static func start(_ answer: @escaping @Sendable (String) -> Answer) async throws -> TestOrigin {
         let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
@@ -60,14 +65,18 @@ final class TestOrigin: Sendable {
     // made the instant the client returns could beat it.
     private final class RequestLog: @unchecked Sendable {
         private let lock = NSLock()
-        private var storage: [String] = []
+        private var storage: [(String, String?)] = []
 
         var paths: [String] {
-            lock.withLock { storage }
+            lock.withLock { storage.map(\.0) }
         }
 
-        func record(_ path: String) {
-            lock.withLock { storage.append(path) }
+        var authorizations: [String?] {
+            lock.withLock { storage.map(\.1) }
+        }
+
+        func record(_ path: String, authorization: String?) {
+            lock.withLock { storage.append((path, authorization)) }
         }
     }
 
@@ -80,6 +89,7 @@ final class TestOrigin: Sendable {
         private let answer: @Sendable (String) -> Answer
         private let log: RequestLog
         private var uri = "/"
+        private var authorization: String?
 
         init(answer: @escaping @Sendable (String) -> Answer, log: RequestLog) {
             self.answer = answer
@@ -90,6 +100,7 @@ final class TestOrigin: Sendable {
             switch unwrapInboundIn(data) {
             case .head(let head):
                 uri = head.uri
+                authorization = head.headers.first(name: "Authorization")
             case .body:
                 break
             case .end:
@@ -99,7 +110,7 @@ final class TestOrigin: Sendable {
 
         private func respond(context: ChannelHandlerContext) {
             let path = uri
-            log.record(path)
+            log.record(path, authorization: authorization)
 
             let answer = answer(path)
             var headers = HTTPHeaders()
@@ -117,6 +128,9 @@ final class TestOrigin: Sendable {
                 context.write(wrapOutboundOut(.end(nil)), promise: nil)
             }
             context.flush()
+            if answer.closeAfterBody {
+                context.close(promise: nil)
+            }
         }
     }
 }
@@ -133,6 +147,32 @@ extension TestOrigin.Answer {
             headers: [("Content-Type", "application/octet-stream"), ("Content-Length", "1073741824")],
             body: Array(repeating: 0, count: 16),
             complete: false,
+        )
+    }
+
+    /// A dataset that dies mid-transfer: the promised length is never delivered
+    /// and the connection drops, which is the only way a half-written file
+    /// appears at all.
+    static func truncated(promising length: Int, writing written: Int) -> Self {
+        .init(
+            status: .ok,
+            headers: [
+                ("Content-Type", "application/octet-stream"), ("Content-Length", "\(length)"),
+            ],
+            body: Array(repeating: 0x41, count: written),
+            complete: false,
+            closeAfterBody: true,
+        )
+    }
+
+    /// A whole small dataset, served in one piece.
+    static func file(_ bytes: [UInt8]) -> Self {
+        .init(
+            status: .ok,
+            headers: [
+                ("Content-Type", "application/octet-stream"), ("Content-Length", "\(bytes.count)"),
+            ],
+            body: bytes,
         )
     }
 }

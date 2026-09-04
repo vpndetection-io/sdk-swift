@@ -31,15 +31,20 @@ public struct VPNDetectionClient: Sendable {
         }
         middlewares.append(ErrorMiddleware())
 
+        // Resolved once, because the download path calls object storage straight
+        // through the transport rather than through the generated client and has
+        // to reach the same implementation a caller substituted.
+        let transport = options.transport ?? DefaultTransport.shared
         self.api = Client(
             serverURL: options.baseURL,
-            transport: options.transport ?? DefaultTransport.shared,
+            configuration: Configuration(dateTranscoder: LenientDateTranscoder()),
+            transport: transport,
             middlewares: middlewares,
         )
         self.cache = options.cache.map(ResultCache.init)
         self.concurrency = options.concurrency
         self.retries = options.retries
-        self.database = DatabaseAPI(api: api, retries: options.retries)
+        self.database = DatabaseAPI(api: api, transport: transport, retries: options.retries)
     }
 
     /// A client that presents `apiKey` and takes every other default.

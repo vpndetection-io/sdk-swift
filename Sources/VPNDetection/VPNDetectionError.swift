@@ -64,8 +64,13 @@ extension VPNDetectionError {
     /// the statuses this API happens to document today. Mapping 400/401/403/429
     /// and letting the rest fall through to the `serverError` default is the
     /// easy mistake, and it makes a 404 from a bad dataset id retryable.
-    static func from(status: Int, headers: HTTPFields, body: ArraySlice<UInt8>) -> VPNDetectionError {
-        let message = messageOf(body) ?? "request failed with status \(status)"
+    ///
+    /// - Parameter fallback: What to say when the answer carried no envelope,
+    ///   for a caller such as object storage whose failures never do.
+    static func from(
+        status: Int, headers: HTTPFields, body: ArraySlice<UInt8>, fallback: String? = nil,
+    ) -> VPNDetectionError {
+        let message = messageOf(body) ?? fallback ?? "request failed with status \(status)"
         let retryAfter = parseRetryAfter(headers[.retryAfter])
 
         if status == 429 {

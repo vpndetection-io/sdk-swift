@@ -1,5 +1,10 @@
 import Foundation
+import HTTPTypes
 import OpenAPIRuntime
+
+/// Where a streaming ``DatabaseAPI/download(_:format:to:)`` puts each chunk as
+/// it arrives.
+public typealias DownloadSink = (ArraySlice<UInt8>) async throws -> Void
 
 /// The licensed dataset downloads. Access is granted by contract, not self-serve.
 ///
@@ -7,14 +12,16 @@ import OpenAPIRuntime
 /// directly.
 public struct DatabaseAPI: Sendable {
     private let api: Client
+    private let transport: any ClientTransport
     private let retries: Int
 
-    init(api: Client, retries: Int) {
+    init(api: Client, transport: any ClientTransport, retries: Int) {
         self.api = api
+        self.transport = transport
         self.retries = retries
     }
 
-    /// The datasets your organization is licensed to download.
+    /// The dataset families your organization is licensed to download.
     public func list() async throws -> [LicensedDataset] {
         try await withRetry(retries) {
             let output = try await api.listDatabases()
@@ -92,6 +99,137 @@ public struct DatabaseAPI: Sendable {
             return url
         }
     }
+
+    /// Download one dataset file, streaming it to `fileURL`. Returns the number
+    /// of bytes written.
+    ///
+    /// The bytes go to a neighboring `.part` file that is renamed on completion,
+    /// so a transfer that dies half way leaves nothing that reads as a whole
+    /// dataset. Nothing is held in memory beyond a single chunk, whatever the
+    /// dataset weighs.
+    ///
+    /// A failure DURING the transfer surfaces as the underlying error rather
+    /// than a ``VPNDetectionError``: a reset socket and a full disk are
+    /// different problems, and flattening both into one kind hides the one you
+    /// can do something about.
+    @discardableResult
+    public func download(_ id: String, format: DatasetFormat, to fileURL: URL) async throws -> Int {
+        let manager = FileManager.default
+        let partial = fileURL.appendingPathExtension("part")
+        guard manager.createFile(atPath: partial.path, contents: nil) else {
+            throw VPNDetectionError(
+                kind: .network, message: "could not create \(partial.path) to download into",
+            )
+        }
+        let handle = try FileHandle(forWritingTo: partial)
+        do {
+            let written = try await download(id, format: format) { chunk in
+                try handle.write(contentsOf: chunk)
+            }
+            try handle.close()
+            if manager.fileExists(atPath: fileURL.path) {
+                try manager.removeItem(at: fileURL)
+            }
+            try manager.moveItem(at: partial, to: fileURL)
+            return written
+        } catch {
+            try? handle.close()
+            try? manager.removeItem(at: partial)
+            throw error
+        }
+    }
+
+    /// Download one dataset file, handing each chunk to `sink` as it arrives.
+    /// Returns the number of bytes handed over.
+    ///
+    /// The counterpart to the file overload when the bytes are going somewhere
+    /// else: a parser, an archive, another socket. The sink is awaited, so
+    /// back pressure is real and a slow sink slows the transfer rather than
+    /// queueing behind it.
+    @discardableResult
+    public func download(
+        _ id: String, format: DatasetFormat, to sink: DownloadSink,
+    ) async throws -> Int {
+        let body = try await datasetFile(id, format)
+        var written = 0
+        for try await chunk in body {
+            try await sink(chunk)
+            written += chunk.count
+        }
+        return written
+    }
+
+    /// Download one dataset file and hand back its bytes.
+    ///
+    /// **This holds the entire file in memory**, and the catalog spans five
+    /// orders of magnitude: `cdn_ip_v1` is 10 KB while `resproxy_ip_90d_v1` is
+    /// 1.79 GB of csv.gz, which will cost you that much resident memory and can
+    /// fail outright. Reach for this at the small end, where the bytes are going
+    /// straight into a parser; use ``download(_:format:to:)`` for anything you
+    /// have not measured.
+    public func downloadBytes(_ id: String, format: DatasetFormat) async throws -> Data {
+        var data = Data()
+        _ = try await download(id, format: format) { chunk in
+            data.append(contentsOf: chunk)
+        }
+        return data
+    }
+
+    // Follows the 302 as a SECOND request straight to the transport, bypassing
+    // the middleware chain that presents the API key: the presigned URL
+    // authorizes itself, so forwarding the credential would hand it to a host
+    // that has no business holding it.
+    //
+    // The body is returned unread. AsyncHTTPClient's deadline covers only the
+    // time to the response head, so a multi-gigabyte transfer is not racing the
+    // transport's request timeout.
+    private func datasetFile(_ id: String, _ format: DatasetFormat) async throws -> HTTPBody {
+        let url = try await downloadURL(id: id, format: format)
+        let (origin, path) = try split(url)
+        return try await withRetry(retries) {
+            let (response, body) = try await transport.send(
+                HTTPRequest(method: .get, scheme: nil, authority: nil, path: path),
+                body: nil,
+                baseURL: origin,
+                operationID: "downloadDatasetFile",
+            )
+            let status = Int(response.status.code)
+            guard (200..<300).contains(status) else {
+                // Left unread: the status is what separates a lapsed link from a
+                // refused one, and nothing bounds the size of an error body.
+                throw VPNDetectionError.from(
+                    status: status,
+                    headers: response.headerFields,
+                    body: [],
+                    fallback: "object storage refused the download link with status \(status)",
+                )
+            }
+            guard let body else {
+                throw VPNDetectionError(
+                    kind: .serverError, message: "object storage answered with no body",
+                    status: status,
+                )
+            }
+            return body
+        }
+    }
+}
+
+// A transport is handed a base URL and a path, so the presigned URL has to come
+// apart into the two. The query carries the signature and cannot be dropped.
+private func split(_ url: URL) throws -> (origin: URL, path: String) {
+    guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+        throw VPNDetectionError(kind: .serverError, message: "unreadable download URL")
+    }
+    let path = components.percentEncodedPath
+    let query = components.percentEncodedQuery
+    components.percentEncodedPath = ""
+    components.percentEncodedQuery = nil
+    components.fragment = nil
+    guard let origin = components.url else {
+        throw VPNDetectionError(kind: .serverError, message: "unreadable download URL")
+    }
+    return (origin, query.map { "\(path)?\($0)" } ?? path)
 }
 
 /// The formats a dataset is published in.
@@ -103,26 +241,53 @@ public enum DatasetFormat: String, Sendable, Hashable, CaseIterable {
     case mmdb
 }
 
-/// One dataset your organization holds a license for.
+/// One dataset FAMILY your organization holds a license for.
+///
+/// A license is held against the family, while a download names a version, so
+/// the ids the download and checksum methods take come from ``versions`` rather
+/// than from this type.
 public struct LicensedDataset: Sendable, Hashable {
-    public let id: String
+    /// The dataset family, e.g. `vpn_ip`. What the license is held against.
+    public let base: String
     public let name: String
     public let summary: String?
-    /// Licensed but no longer published. Talk to us.
-    public let retired: Bool?
     /// What your license permits you to do with the data.
     public let redistribution: Redistribution
     public let starts: Date?
+    /// `nil` when the license does not expire.
     public let expires: Date?
     /// False when the license has lapsed; downloads are refused.
     public let inTerm: Bool
-    public let formats: [DatasetFormatSize]
+    public let standing: Standing
+    /// Every published version of this family.
+    public let versions: [LicensedVersion]
 
     public enum Redistribution: String, Sendable, Hashable, CaseIterable {
         case evaluation
         case `internal`
         case redistribute
     }
+
+    /// Where the organization stands on this family.
+    public enum Standing: String, Sendable, Hashable, CaseIterable {
+        /// A term that has ended.
+        case expired
+        /// A live grant.
+        case licensed
+        /// Published, but never bought.
+        case unlicensed
+    }
+}
+
+/// One published version of a licensed family.
+public struct LicensedVersion: Sendable, Hashable {
+    /// The versioned dataset id, e.g. `vpn_ip_v1`. This is what a download takes.
+    public let id: String
+    public let version: Int
+    public let summary: String?
+    public let formats: [DatasetFormatSize]
+    /// The formats an evaluation sample is published in, if any.
+    public let sampleFormats: [DatasetFormat]
 }
 
 /// The published size of one dataset in one format.
@@ -212,15 +377,44 @@ extension Operations.DatabaseChecksum.Input.Query.FormatPayload {
 
 extension LicensedDataset {
     init(_ wire: Components.Schemas.LicensedDataset) {
-        self.id = wire.id
+        self.base = wire.base
         self.name = wire.name
         self.summary = wire.summary
-        self.retired = wire.retired
         self.redistribution = Redistribution(wire.redistribution)
         self.starts = wire.starts
         self.expires = wire.expires
         self.inTerm = wire.inTerm
+        self.standing = Standing(wire.standing)
+        self.versions = wire.versions.map(LicensedVersion.init)
+    }
+}
+
+extension LicensedDataset.Standing {
+    init(_ wire: Components.Schemas.LicensedDataset.StandingPayload) {
+        switch wire {
+        case .expired: self = .expired
+        case .licensed: self = .licensed
+        case .unlicensed: self = .unlicensed
+        }
+    }
+}
+
+extension LicensedVersion {
+    init(_ wire: Components.Schemas.LicensedVersion) {
+        self.id = wire.id
+        self.version = wire.version
+        self.summary = wire.summary
         self.formats = wire.formats.map(DatasetFormatSize.init)
+        self.sampleFormats = (wire.sampleFormats ?? []).map(DatasetFormat.init)
+    }
+}
+
+extension DatasetFormat {
+    init(_ wire: Components.Schemas.LicensedVersion.SampleFormatsPayloadPayload) {
+        switch wire {
+        case .csvgz: self = .csvgz
+        case .mmdb: self = .mmdb
+        }
     }
 }
 

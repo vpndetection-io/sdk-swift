@@ -28,6 +28,30 @@ enum DefaultTransport {
     )
 }
 
+/// Reads an RFC 3339 timestamp whether or not it carries fractional seconds.
+///
+/// The runtime ships two transcoders and each rejects what the other accepts:
+/// `.iso8601` refuses `2026-09-04T07:49:45.118Z`, which is what the licence
+/// dates are served as, and `.iso8601WithFractionalSeconds` refuses
+/// `2026-09-04T07:49:45Z`, which is what a service with a different JSON encoder
+/// behind the same host would send. Both are valid RFC 3339, so both are read.
+/// Only the decode side has to be forgiving; nothing here ever encodes a date.
+struct LenientDateTranscoder: DateTranscoder {
+    private let fractional: any DateTranscoder = .iso8601WithFractionalSeconds
+    private let whole: any DateTranscoder = .iso8601
+
+    func encode(_ date: Date) throws -> String {
+        try fractional.encode(date)
+    }
+
+    func decode(_ string: String) throws -> Date {
+        guard let date = try? fractional.decode(string) else {
+            return try whole.decode(string)
+        }
+        return date
+    }
+}
+
 /// Turns every non-2xx answer into a ``VPNDetectionError`` before the generated
 /// client can decode it.
 ///

@@ -262,16 +262,27 @@ struct ClientTests {
         #expect(metadata.size["csvgz"] == 987)
     }
 
-    @Test("the licensed dataset list carries its formats and license term")
-    func listCarriesFormatsAndTerm() async throws {
+    // The licence is held against the FAMILY, and the ids a download takes hang
+    // off `versions`. A listing that stopped at the family would leave a caller
+    // with nothing to pass to `download`.
+    @Test("the licensed dataset list carries each family's versions and license term")
+    func listCarriesVersionsAndTerm() async throws {
         let stub = StubTransport([
             "/api/v1/database/list": .json([
                 "datasets": [[
-                    "id": "vpn_ip_extended_v1",
-                    "name": "VPN IP Extended",
+                    "base": "vpn_ip",
+                    "name": "VPN IP",
                     "redistribution": "internal",
                     "in_term": true,
-                    "formats": [["format": "mmdb", "bytes": 42], ["format": "csvgz", "bytes": nil]],
+                    "standing": "licensed",
+                    "versions": [[
+                        "id": "vpn_ip_extended_v1",
+                        "version": 1,
+                        "formats": [
+                            ["format": "mmdb", "bytes": 42], ["format": "csvgz", "bytes": nil],
+                        ],
+                        "sampleFormats": ["csvgz"],
+                    ]],
                 ]]
             ])
         ])
@@ -279,10 +290,39 @@ struct ClientTests {
         let datasets = try await client(stub, apiKey: "key").database.list()
 
         #expect(datasets.count == 1)
+        #expect(datasets[0].base == "vpn_ip")
         #expect(datasets[0].redistribution == .internal)
+        #expect(datasets[0].standing == .licensed)
         #expect(datasets[0].inTerm)
-        #expect(datasets[0].formats.map(\.format) == [.mmdb, .csvgz])
-        #expect(datasets[0].formats[1].bytes == nil, "an unpublished format has no size")
+        let version = try #require(datasets[0].versions.first)
+        #expect(version.id == "vpn_ip_extended_v1")
+        #expect(version.version == 1)
+        #expect(version.formats.map(\.format) == [.mmdb, .csvgz])
+        #expect(version.formats[1].bytes == nil, "an unpublished format has no size")
+        #expect(version.sampleFormats == [.csvgz])
+    }
+
+    // The runtime's stock transcoders each reject what the other accepts, and
+    // the API serves the fractional form, so a strict client decodes the whole
+    // listing as a corrupt-date failure.
+    @Test("a license date decodes with or without fractional seconds")
+    func licenseDatesDecodeEitherWay() async throws {
+        let stub = StubTransport([
+            "/api/v1/database/list": .json([
+                "datasets": [
+                    family("vpn_ip", starts: "2026-09-04T07:49:45.118Z"),
+                    family("cdn_ip", starts: "2026-09-04T07:49:45Z"),
+                ]
+            ])
+        ])
+
+        let datasets = try await client(stub, apiKey: "key").database.list()
+
+        #expect(datasets.count == 2)
+        for dataset in datasets {
+            #expect(dataset.starts != nil, "\(dataset.base) lost its start date")
+        }
+        #expect(datasets[0].starts == datasets[1].starts?.addingTimeInterval(0.118))
     }
 
     @Test("a 404 from a bad dataset id is not retried")
@@ -378,7 +418,145 @@ struct DownloadRedirectTests {
     }
 }
 
+/// The streaming transfer, against real local origins for the same reason: the
+/// second request goes to object storage rather than to the API, and what it
+/// must NOT carry is a header.
+@Suite("Download transfer")
+struct DownloadTransferTests {
+    struct SinkStopped: Error {}
+
+    static let payload: [UInt8] = Array("a small dataset, gzipped in real life".utf8)
+
+    @Test("a download lands intact, and the key never reaches object storage")
+    func downloadWritesTheFileAndWithholdsTheKey() async throws {
+        let origins = try await Origins.start(.file(Self.payload))
+        defer { origins.stop() }
+        let directory = try scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let destination = directory.appendingPathComponent("cdn_ip_v1.csv.gz")
+
+        let written = try await origins.client.database.download(
+            "cdn_ip_v1", format: .csvgz, to: destination,
+        )
+
+        #expect(written == Self.payload.count)
+        let landed = try Data(contentsOf: destination)
+        #expect([UInt8](landed) == Self.payload)
+        #expect(landed.count == written, "the file is not the length the method reported")
+        #expect(
+            FileManager.default.fileExists(atPath: destination.path + ".part") == false,
+            "the .part file outlived a successful transfer",
+        )
+        #expect(origins.api.receivedAuthorizations == ["Bearer key"])
+        #expect(
+            origins.storage.receivedAuthorizations == [nil],
+            "the API key was presented to object storage",
+        )
+    }
+
+    @Test("downloadBytes hands back the same bytes")
+    func downloadBytesMatchesTheFile() async throws {
+        let origins = try await Origins.start(.file(Self.payload))
+        defer { origins.stop() }
+
+        let bytes = try await origins.client.database.downloadBytes("cdn_ip_v1", format: .csvgz)
+
+        #expect([UInt8](bytes) == Self.payload)
+    }
+
+    // Writing straight to the destination passes every other case here, because
+    // a refusal fails before any file exists. Only a death mid-body produces the
+    // truncated file that would otherwise read as a whole dataset.
+    @Test("a transfer that dies leaves neither a partial nor a whole file")
+    func aDeadTransferLeavesNothingBehind() async throws {
+        let origins = try await Origins.start(.truncated(promising: 4096, writing: 16))
+        defer { origins.stop() }
+        let directory = try scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let destination = directory.appendingPathComponent("cdn_ip_v1.csv.gz")
+
+        await #expect(throws: (any Error).self) {
+            try await origins.client.database.download("cdn_ip_v1", format: .csvgz, to: destination)
+        }
+
+        let manager = FileManager.default
+        #expect(manager.fileExists(atPath: destination.path) == false)
+        #expect(manager.fileExists(atPath: destination.path + ".part") == false)
+    }
+
+    // The sink sees bytes while the body is still arriving, so nothing collected
+    // the dataset first. A buffering implementation waits for a gigabyte that
+    // never comes.
+    // The time limit is what makes a buffering implementation FAIL rather than
+    // hang: collecting first waits on a gigabyte the origin never sends.
+    @Test("the sink is fed while the body is still arriving", .timeLimit(.minutes(1)))
+    func theSinkSeesBytesBeforeTheBodyEnds() async throws {
+        let origins = try await Origins.start(.neverEndingGigabyte)
+        defer { origins.stop() }
+
+        let started = ContinuousClock.now
+        await #expect(throws: SinkStopped.self) {
+            try await origins.client.database.download("cdn_ip_v1", format: .csvgz) { chunk in
+                #expect(chunk.isEmpty == false)
+                throw SinkStopped()
+            }
+        }
+        let elapsed = ContinuousClock.now - started
+
+        #expect(elapsed < .seconds(5), "the promised gigabyte was being collected first")
+    }
+
+    private func scratchDirectory() throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vpndetection-download-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    /// An API that redirects and a storage host that answers, plus a client
+    /// pointed at the first.
+    struct Origins {
+        let api: TestOrigin
+        let storage: TestOrigin
+        let client: VPNDetectionClient
+
+        static func start(_ answer: TestOrigin.Answer) async throws -> Origins {
+            let storage = try await TestOrigin.start { _ in answer }
+            let location = "http://127.0.0.1:\(storage.port)/cdn_ip_v1.csv.gz?signature=abc"
+            let api = try await TestOrigin.start { _ in .redirect(to: location) }
+            return Origins(
+                api: api,
+                storage: storage,
+                client: VPNDetectionClient(
+                    options: .init(
+                        apiKey: "key",
+                        baseURL: URL(string: "http://127.0.0.1:\(api.port)")!,
+                        retries: 0,
+                    ),
+                ),
+            )
+        }
+
+        func stop() {
+            Task { try? await storage.stop() }
+            Task { try? await api.stop() }
+        }
+    }
+}
+
 extension ClientTests {
+    func family(_ base: String, starts: String) -> [String: Any] {
+        [
+            "base": base,
+            "name": base,
+            "redistribution": "internal",
+            "in_term": true,
+            "standing": "licensed",
+            "starts": starts,
+            "versions": [["id": "\(base)_v1", "version": 1, "formats": []]],
+        ]
+    }
+
     func client(
         _ transport: StubTransport,
         apiKey: String? = nil,

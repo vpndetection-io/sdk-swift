@@ -192,7 +192,7 @@ struct ClientTests {
         await #expect(stub.callCount == 4)
     }
 
-    // Swift has `??`, so the absent-versus-false distinction needs no OrFalse
+    // Swift has `??`, so the absent-versus-false distinction needs no helper
     // reader the way Go and Java do. This pins the ergonomics the README teaches.
     @Test("an absent flag coalesces to false without losing the distinction")
     func absentFlagCoalescesWithNilCheck() async throws {

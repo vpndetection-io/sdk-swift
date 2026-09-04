@@ -61,18 +61,6 @@ Every setting has a default, and `VPNDetectionClient.Options` is where you chang
 let client = VPNDetectionClient(options: .init(apiKey: key, concurrency: 32, retries: 4))
 ```
 
-### Absent is not false
-
-Only `ip` and `isVpn` come back on every plan. Each remaining flag is an `Optional`, and `nil` means "not in your plan" rather than "checked, and no":
-
-```swift
-result.isHosting            // nil on the free tier, false or true on a plan that includes it
-result.isHosting ?? false   // when you only care whether the address is flagged
-result.isHosting == nil     // when you need to tell "not in your plan" from a real answer
-```
-
-A detail object that is present but empty means the flag above it is false; a populated one always carries every one of its keys.
-
 ### Batch lookup
 
 You can do batch lookups with a list, which parallelizes requests for you efficiently:
@@ -182,6 +170,15 @@ let bytes = try await client.database.downloadBytes("cdn_ip_v1", format: .csvgz)
 ```
 
 `downloadBytes` holds the whole file in memory, and the catalog runs from `cdn_ip_v1` at 10 KB to `resproxy_ip_90d_v1` at 1.79 GB, so use `download` for anything you have not measured.
+
+### Absent is not false
+
+Only `ip` and `isVpn` come back on every plan. The rest are `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
+
+```swift
+result.isHosting ?? false   // when you only want the flag
+result.isHosting == nil     // when "not in my plan" has to be told apart
+```
 
 ### Supplying your own transport
 

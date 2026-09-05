@@ -113,7 +113,7 @@ public struct DatabaseAPI: Sendable {
     /// different problems, and flattening both into one kind hides the one you
     /// can do something about.
     @discardableResult
-    public func download(_ id: String, format: DatasetFormat, to fileURL: URL) async throws -> Int {
+    public func download(_ id: String, format: DatasetFormat, to fileURL: URL) async throws -> Int64 {
         let manager = FileManager.default
         let partial = fileURL.appendingPathExtension("part")
         guard manager.createFile(atPath: partial.path, contents: nil) else {
@@ -149,12 +149,12 @@ public struct DatabaseAPI: Sendable {
     @discardableResult
     public func download(
         _ id: String, format: DatasetFormat, to sink: DownloadSink,
-    ) async throws -> Int {
+    ) async throws -> Int64 {
         let body = try await datasetFile(id, format)
-        var written = 0
+        var written: Int64 = 0
         for try await chunk in body {
             try await sink(chunk)
-            written += chunk.count
+            written += Int64(chunk.count)
         }
         return written
     }
@@ -294,7 +294,7 @@ public struct LicensedVersion: Sendable, Hashable {
 public struct DatasetFormatSize: Sendable, Hashable {
     public let format: DatasetFormat
     /// Size of the published file, or `nil` when it has not been published yet.
-    public let bytes: Int?
+    public let bytes: Int64?
 }
 
 /// What is inside one dataset.
@@ -308,13 +308,13 @@ public struct DatasetMetadata: Sendable, Hashable {
     /// The build date, as `YYYY-MM-DD`.
     public let updated: String
     /// Row count in the current build.
-    public let entries: Int
+    public let entries: Int64
     /// Columns, keyed by format.
     public let schema: [String: [DatasetColumn]]
     /// A few real rows, keyed by format.
     public let sample: [String: [[String: JSONValue]]]
     /// Bytes per format.
-    public let size: [String: Int]
+    public let size: [String: Int64]
 }
 
 /// One column of a dataset, as published.
@@ -329,7 +329,7 @@ public struct Download: Sendable, Hashable {
     public let datasetId: String
     public let format: String
     public let outcome: Outcome
-    public let bytes: Int?
+    public let bytes: Int64?
     public let created: Date
 
     public enum Outcome: String, Sendable, Hashable, CaseIterable {
@@ -435,7 +435,7 @@ extension DatasetFormatSize {
             case .csvgz: .csvgz
             case .mmdb: .mmdb
             }
-        self.bytes = wire.bytes
+        self.bytes = wire.bytes.map(Int64.init)
     }
 }
 
@@ -444,12 +444,12 @@ extension DatasetMetadata {
         self.id = wire.id
         self.updateFreq = wire.updateFreq
         self.updated = wire.updated
-        self.entries = wire.entries
+        self.entries = Int64(wire.entries)
         self.schema = wire.schema.additionalProperties.mapValues { $0.map(DatasetColumn.init) }
         self.sample = (wire.sample?.additionalProperties ?? [:]).mapValues { rows in
             rows.map { $0.value.mapValues(JSONValue.init) }
         }
-        self.size = wire.size?.additionalProperties ?? [:]
+        self.size = (wire.size?.additionalProperties ?? [:]).mapValues(Int64.init)
     }
 }
 
@@ -466,7 +466,7 @@ extension Download {
         self.datasetId = wire.datasetId
         self.format = wire.format
         self.outcome = Outcome(rawValue: wire.outcome.rawValue) ?? .unknown
-        self.bytes = wire.bytes
+        self.bytes = wire.bytes.map(Int64.init)
         self.created = wire.created
     }
 }

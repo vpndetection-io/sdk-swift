@@ -244,7 +244,10 @@ struct ClientTests {
                 "entries": 1234,
                 "schema": ["csvgz": [["name": "ip", "type": "varchar", "description": "the range"]]],
                 "sample": ["csvgz": [["ip": "45.83.91.0/24", "hits": 42, "ok": true]]],
-                "size": ["csvgz": 987],
+                // Beyond Int32. `Int` is 32-bit on watchOS's arm64_32, which
+                // Package.swift claims to support, so a published file larger
+                // than ~2.1 GB would have truncated silently there.
+                "size": ["csvgz": 5_733_061_000],
             ])
         ])
 
@@ -259,7 +262,7 @@ struct ClientTests {
         #expect(metadata.sample["csvgz"]?.first?["ip"] == .string("45.83.91.0/24"))
         #expect(metadata.sample["csvgz"]?.first?["hits"]?.intValue == 42)
         #expect(metadata.sample["csvgz"]?.first?["ok"] == .bool(true))
-        #expect(metadata.size["csvgz"] == 987)
+        #expect(metadata.size["csvgz"] == 5_733_061_000)
     }
 
     // The licence is held against the FAMILY, and the ids a download takes hang

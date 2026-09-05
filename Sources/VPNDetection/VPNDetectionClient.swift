@@ -26,7 +26,11 @@ public struct VPNDetectionClient: Sendable {
         precondition(options.retries >= 0, "retries cannot be negative")
 
         var middlewares: [any ClientMiddleware] = []
-        if let apiKey = options.apiKey {
+        // An empty key is treated as no key. It is what an unset environment
+        // variable or CI secret interpolates to, and `Bearer ` with nothing
+        // behind it is never what anyone meant - the API would refuse it as
+        // unauthorized rather than serve the anonymous tier that was intended.
+        if let apiKey = options.apiKey, !apiKey.isEmpty {
             middlewares.append(AuthMiddleware(apiKey: apiKey))
         }
         middlewares.append(ErrorMiddleware())

@@ -13,7 +13,7 @@ import VPNDetection
 /// through CI.
 @Suite("Staging database downloads")
 struct DatabaseTests {
-    /// The max organization licenses `cdn_ip` for redistribution, and at ~10 KB
+    /// The max organization licenses `cdn_ip` for license_type, and at ~10 KB
     /// it is the only dataset small enough to move in CI.
     static let datasetId = "cdn_ip_v1"
     static let format = DatasetFormat.csvgz

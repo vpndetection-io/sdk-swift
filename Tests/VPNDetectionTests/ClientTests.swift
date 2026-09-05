@@ -275,7 +275,7 @@ struct ClientTests {
                 "datasets": [[
                     "base": "vpn_ip",
                     "name": "VPN IP",
-                    "redistribution": "internal",
+                    "license_type": "standard",
                     "in_term": true,
                     "standing": "licensed",
                     "versions": [[
@@ -294,7 +294,7 @@ struct ClientTests {
 
         #expect(datasets.count == 1)
         #expect(datasets[0].base == "vpn_ip")
-        #expect(datasets[0].redistribution == .internal)
+        #expect(datasets[0].license_type == .internal)
         #expect(datasets[0].standing == .licensed)
         #expect(datasets[0].inTerm)
         let version = try #require(datasets[0].versions.first)
@@ -552,7 +552,7 @@ extension ClientTests {
         [
             "base": base,
             "name": base,
-            "redistribution": "internal",
+            "license_type": "standard",
             "in_term": true,
             "standing": "licensed",
             "starts": starts,

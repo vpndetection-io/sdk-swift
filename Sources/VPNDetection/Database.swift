@@ -252,7 +252,7 @@ public struct LicensedDataset: Sendable, Hashable {
     public let name: String
     public let summary: String?
     /// What your license permits you to do with the data.
-    public let redistribution: Redistribution
+    public let license_type: LicenseType
     public let starts: Date?
     /// `nil` when the license does not expire.
     public let expires: Date?
@@ -262,7 +262,7 @@ public struct LicensedDataset: Sendable, Hashable {
     /// Every published version of this family.
     public let versions: [LicensedVersion]
 
-    public enum Redistribution: String, Sendable, Hashable, CaseIterable {
+    public enum LicenseType: String, Sendable, Hashable, CaseIterable {
         case evaluation
         case `internal`
         case redistribute
@@ -380,7 +380,7 @@ extension LicensedDataset {
         self.base = wire.base
         self.name = wire.name
         self.summary = wire.summary
-        self.redistribution = Redistribution(wire.redistribution)
+        self.license_type = LicenseType(wire.license_type)
         self.starts = wire.starts
         self.expires = wire.expires
         self.inTerm = wire.inTerm
@@ -418,8 +418,8 @@ extension DatasetFormat {
     }
 }
 
-extension LicensedDataset.Redistribution {
-    init(_ wire: Components.Schemas.LicensedDataset.RedistributionPayload) {
+extension LicensedDataset.LicenseType {
+    init(_ wire: Components.Schemas.LicensedDataset.LicenseTypePayload) {
         switch wire {
         case .evaluation: self = .evaluation
         case ._internal: self = .internal

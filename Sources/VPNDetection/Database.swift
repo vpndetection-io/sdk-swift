@@ -264,7 +264,7 @@ public struct LicensedDataset: Sendable, Hashable {
 
     public enum LicenseType: String, Sendable, Hashable, CaseIterable {
         case evaluation
-        case `internal`
+        case standard
         case redistribute
     }
 
@@ -422,7 +422,7 @@ extension LicensedDataset.LicenseType {
     init(_ wire: Components.Schemas.LicensedDataset.LicenseTypePayload) {
         switch wire {
         case .evaluation: self = .evaluation
-        case ._internal: self = .internal
+        case .standard: self = .standard
         case .redistribute: self = .redistribute
         }
     }

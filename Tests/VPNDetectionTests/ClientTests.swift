@@ -294,7 +294,7 @@ struct ClientTests {
 
         #expect(datasets.count == 1)
         #expect(datasets[0].base == "vpn_ip")
-        #expect(datasets[0].license_type == .internal)
+        #expect(datasets[0].license_type == .standard)
         #expect(datasets[0].standing == .licensed)
         #expect(datasets[0].inTerm)
         let version = try #require(datasets[0].versions.first)

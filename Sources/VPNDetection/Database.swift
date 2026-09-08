@@ -252,7 +252,7 @@ public struct LicensedDataset: Sendable, Hashable {
     public let name: String
     public let summary: String?
     /// What your license permits you to do with the data.
-    public let license_type: LicenseType
+    public let licenseType: LicenseType
     public let starts: Date?
     /// `nil` when the license does not expire.
     public let expires: Date?
@@ -380,7 +380,7 @@ extension LicensedDataset {
         self.base = wire.base
         self.name = wire.name
         self.summary = wire.summary
-        self.license_type = LicenseType(wire.license_type)
+        self.licenseType = LicenseType(wire.licenseType)
         self.starts = wire.starts
         self.expires = wire.expires
         self.inTerm = wire.inTerm

@@ -13,14 +13,14 @@ import VPNDetection
 /// through CI.
 @Suite("Staging database downloads")
 struct DatabaseTests {
-    /// The max organization licenses `cdn_ip` for license_type, and at ~10 KB
+    /// The max organization licenses `cdn_ip` for redistribution, and at ~10 KB
     /// it is the only dataset small enough to move in CI.
     static let datasetId = "cdn_ip_v1"
     static let format = DatasetFormat.csvgz
     /// 8 MiB against a ~10 KB dataset. Three orders of magnitude of headroom, so
     /// tripping it means the suite is pointed somewhere unintended, which is
     /// exactly when a transfer must not go ahead.
-    static let ceiling = 8 * 1024 * 1024
+    static let ceiling: Int64 = 8 * 1024 * 1024
     /// A real catalogue id the max organization holds no license for.
     static let unlicensedId = "hosting_ip_v1"
 
@@ -79,7 +79,7 @@ struct DatabaseTests {
 
         #expect(transfer.written > 0, "nothing was transferred")
         let landed = try Data(contentsOf: transfer.file)
-        #expect(landed.count == transfer.written, "the file is not the length the method reported")
+        #expect(Int64(landed.count) == transfer.written, "the file is not the length the method reported")
         #expect(
             FileManager.default.fileExists(atPath: transfer.file.path + ".part") == false,
             "the .part file outlived a successful transfer",
@@ -109,7 +109,7 @@ struct DatabaseTests {
             Self.datasetId, format: Self.format,
         )
 
-        #expect(bytes.count == transfer.written, "the in-memory copy is a different length")
+        #expect(Int64(bytes.count) == transfer.written, "the in-memory copy is a different length")
         #expect(sha256(bytes) == transfer.checksums.sha256, "the in-memory copy is not the file")
     }
 }
@@ -134,7 +134,7 @@ actor Transfers {
 struct Transfer: Sendable {
     let client: VPNDetectionClient
     let file: URL
-    let written: Int
+    let written: Int64
     let checksums: DatasetChecksums
     let facts: [RecordingTransport.Fact]
 }

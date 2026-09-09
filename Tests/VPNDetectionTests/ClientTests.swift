@@ -557,6 +557,7 @@ extension ClientTests {
         [
             "base": base,
             "name": base,
+            "summary": "\(base) rows",
             "license_type": "standard",
             "in_term": true,
             "standing": "licensed",

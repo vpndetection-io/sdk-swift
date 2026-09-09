@@ -256,6 +256,13 @@ public struct LicensedDataset: Sendable, Hashable {
     public let starts: Date?
     /// `nil` when the license does not expire.
     public let expires: Date?
+    /// When a rolling license next renews. `nil` when the license has no defined
+    /// term, when ``expires`` sets a hard stop instead, and when there is none.
+    public let renewsAt: Date?
+    /// The last day notice of non-renewal can be given for the term ending at
+    /// ``renewsAt``. `nil` whenever that is, and when the agreement records no
+    /// notice period.
+    public let noticeDueAt: Date?
     /// False when the license has lapsed; downloads are refused.
     public let inTerm: Bool
     public let standing: Standing
@@ -383,6 +390,8 @@ extension LicensedDataset {
         self.licenseType = LicenseType(wire.licenseType)
         self.starts = wire.starts
         self.expires = wire.expires
+        self.renewsAt = wire.renewsAt
+        self.noticeDueAt = wire.noticeDueAt
         self.inTerm = wire.inTerm
         self.standing = Standing(wire.standing)
         self.versions = wire.versions.map(LicensedVersion.init)

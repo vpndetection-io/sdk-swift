@@ -275,7 +275,12 @@ struct ClientTests {
                 "datasets": [[
                     "base": "vpn_ip",
                     "name": "VPN IP",
+                    "summary": "vpn_ip rows",
                     "license_type": "standard",
+                    "starts": "2026-01-01T00:00:00.000Z",
+                    "expires": nil,
+                    "renews_at": nil,
+                    "notice_due_at": nil,
                     "in_term": true,
                     "standing": "licensed",
                     "versions": [[

@@ -13,7 +13,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "3.0.1"),
+    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "3.1.0"),
 ]
 ```
 
@@ -60,6 +60,26 @@ Every setting has a default, and `VPNDetectionClient.Options` is where you chang
 ```swift
 let client = VPNDetectionClient(options: .init(apiKey: key, concurrency: 32, retries: 4))
 ```
+
+### Your own address
+
+```swift
+let result = try await client.myIP()
+print(result.ip)   // the address we saw this call come from
+```
+
+Same answer `lookup` would give for that address, and the same cost against your allowance. It is deliberately not cached: which address you are is the whole question, and a machine that moves between networks would otherwise be told where it used to be.
+
+### Your plan and usage
+
+```swift
+let acct = try await client.myAccount()
+print(acct.plan.key)          // max
+print(acct.usage.requests)    // 580
+print(acct.usage.windowEnd)   // when the allowance resets
+```
+
+Usage counts against the anniversary of your subscription, not the calendar month and not the billing period, and it is the same number a lookup is gated on. `hardLimit` is `nil` on an uncapped plan, which is not the same as zero.
 
 ### Batch lookup
 

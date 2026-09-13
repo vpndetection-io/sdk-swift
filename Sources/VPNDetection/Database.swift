@@ -252,7 +252,7 @@ public struct Database: Sendable, Hashable {
     public let name: String
     public let summary: String?
     /// What your license permits you to do with the data.
-    public let licenseType: LicenseType
+    public let licenseType: LicenseType?
     public let starts: Date?
     /// `nil` when the license does not expire.
     public let expires: Date?
@@ -382,7 +382,7 @@ extension Database {
         self.base = wire.base
         self.name = wire.name
         self.summary = wire.summary
-        self.licenseType = LicenseType(wire.licenseType)
+        self.licenseType = wire.licenseType.flatMap(LicenseType.init)
         self.starts = wire.starts
         self.expires = wire.expires
         self.renewsAt = wire.renewsAt
@@ -423,11 +423,16 @@ extension DatabaseFormat {
 }
 
 extension Database.LicenseType {
-    init(_ wire: Components.Schemas.LicenseType) {
+    /// Failable because the wire enum carries the `null` member the spec needs
+    /// for the field to be nullable at all, and the generator spells it
+    /// `._empty_`. That is the absence of a licence, not a kind of one, so it
+    /// becomes nil rather than a case nobody can act on.
+    init?(_ wire: Components.Schemas.Database.LicenseTypePayload) {
         switch wire {
         case .evaluation: self = .evaluation
         case .standard: self = .standard
         case .redistribute: self = .redistribute
+        default: return nil
         }
     }
 }

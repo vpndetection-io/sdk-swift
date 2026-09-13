@@ -21,7 +21,7 @@ let sdk: Package.Dependency =
     if let local = ProcessInfo.processInfo.environment["VPNDETECTION_SDK_LOCAL_PATH"] {
         .package(path: local)
     } else {
-        .package(url: "https://github.com/vpndetection-io/sdk-swift.git", "1.0.0"..<"2.0.0")
+        .package(url: "https://github.com/vpndetection-io/sdk-swift.git", "3.0.0"..<"4.0.0")
     }
 
 let package = Package(

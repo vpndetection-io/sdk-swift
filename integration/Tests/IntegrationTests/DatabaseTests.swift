@@ -16,7 +16,7 @@ struct DatabaseTests {
     /// The max organization licenses `cdn_ip` for redistribution, and at ~10 KB
     /// it is the only dataset small enough to move in CI.
     static let datasetId = "cdn_ip_v1"
-    static let format = DatasetFormat.csvgz
+    static let format = DatabaseFormat.csvgz
     /// 8 MiB against a ~10 KB dataset. Three orders of magnitude of headroom, so
     /// tripping it means the suite is pointed somewhere unintended, which is
     /// exactly when a transfer must not go ahead.
@@ -30,10 +30,21 @@ struct DatabaseTests {
 
         let datasets = try await client.database.list()
 
-        #expect(datasets.isEmpty == false, "the max organization licenses nothing")
+        #expect(datasets.isEmpty == false, "the catalogue arrived empty")
+        var licensed: [String] = []
         for dataset in datasets {
             #expect(dataset.base.isEmpty == false)
             #expect(dataset.name.isEmpty == false)
+            // `list` answers the WHOLE catalogue, so an unlicensed family is a
+            // normal row with no licence type at all. Asserting one either way
+            // is what tells a nil apart from a value this client cannot read.
+            if dataset.standing == .unlicensed {
+                #expect(dataset.licenseType == nil,
+                        "\(dataset.base) is unlicensed and carries a right")
+            } else {
+                #expect(dataset.licenseType != nil, "\(dataset.base) carries no right")
+                licensed.append(dataset.base)
+            }
             // The point of the family shape: a license covers the family, and
             // these are the ids the download and checksum methods take. Before
             // the spec was corrected this list did not exist, so `list` could
@@ -44,8 +55,11 @@ struct DatabaseTests {
                 #expect(version.version > 0)
             }
         }
-        let ids = datasets.flatMap { $0.versions.map(\.id) }
-        print("licensed: \(ids.joined(separator: ", "))")
+        // The max org holds grants in staging, so an empty list here is the
+        // catalogue arriving without any of them rather than a plan that buys
+        // nothing.
+        #expect(licensed.isEmpty == false, "the max organization licenses nothing")
+        print("catalogue: \(datasets.count), licensed: \(licensed.joined(separator: ", "))")
     }
 
     @Test("a dataset the organization does not license is refused cleanly", Tier.max.needsKey)
@@ -135,7 +149,7 @@ struct Transfer: Sendable {
     let client: VPNDetectionClient
     let file: URL
     let written: Int64
-    let checksums: DatasetChecksums
+    let checksums: DbChecksums
     let facts: [RecordingTransport.Fact]
 }
 

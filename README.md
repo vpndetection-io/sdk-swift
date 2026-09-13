@@ -150,10 +150,10 @@ Note that `rateLimited` and `quotaExceeded` both arrive as HTTP 429 and are not 
 
 ### Database downloads
 
-If your key carries the `db.download` scope, the licensed datasets are available through `client.database`. `download` fetches one to a file, streaming it straight to disk so that nothing bigger than a chunk is ever held in memory:
+If your key carries the `db.download` scope, the licensed databases are available through `client.database`. `download` fetches one to a file, streaming it straight to disk so that nothing bigger than a chunk is ever held in memory:
 
 ```swift
-let datasets = try await client.database.list()
+let databases = try await client.database.list()
 
 let written = try await client.database.download(
     "vpn_ip_extended_v1", format: .mmdb,
@@ -162,7 +162,7 @@ let written = try await client.database.download(
 print("\(written) bytes")
 ```
 
-Or take the time-limited link and run the transfer yourself, or take a small dataset as bytes:
+Or take the time-limited link and run the transfer yourself, or take a small database as bytes:
 
 ```swift
 let url = try await client.database.downloadURL(id: "vpn_ip_extended_v1", format: .mmdb)
@@ -190,7 +190,7 @@ import OpenAPIURLSession
 let client = VPNDetectionClient(options: .init(transport: URLSessionTransport()))
 ```
 
-One thing to know if you do: the download endpoint answers `302`, and the library follows that redirect itself as a second request rather than letting the transport do it, so a transport that follows redirects would read a whole dataset into memory before the library ever saw the link. Configure yours not to. The library refuses such a response rather than reading it, but the transfer has already started by then.
+One thing to know if you do: the download endpoint answers `302`, and the library follows that redirect itself as a second request rather than letting the transport do it, so a transport that follows redirects would read a whole database into memory before the library ever saw the link. Configure yours not to. The library refuses such a response rather than reading it, but the transfer has already started by then.
 
 ## Other Libraries
 

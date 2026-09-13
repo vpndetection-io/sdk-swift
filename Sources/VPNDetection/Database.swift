@@ -22,24 +22,24 @@ public struct DatabaseAPI: Sendable {
     }
 
     /// The dataset families your organization is licensed to download.
-    public func list() async throws -> [LicensedDataset] {
+    public func list() async throws -> [Database] {
         try await withRetry(retries) {
             let output = try await api.listDatabases()
             guard case .ok(let ok) = output else {
                 throw unexpected(output)
             }
-            return try ok.body.json.datasets.map(LicensedDataset.init)
+            return try ok.body.json.databases.map(Database.init)
         }
     }
 
     /// What is inside one dataset: schema, sample rows, row count, sizes.
-    public func metadata(id: String) async throws -> DatasetMetadata {
+    public func metadata(id: String) async throws -> DatabaseMetadata {
         try await withRetry(retries) {
             let output = try await api.databaseMetadata(query: .init(id: id))
             guard case .ok(let ok) = output else {
                 throw unexpected(output)
             }
-            return DatasetMetadata(try ok.body.json)
+            return DatabaseMetadata(try ok.body.json)
         }
     }
 
@@ -48,7 +48,7 @@ public struct DatabaseAPI: Sendable {
     /// Returns the whole set rather than one algorithm: which digests a dataset
     /// publishes is the API's choice, not ours, and they arrive nested under
     /// `checksums` rather than at the top level.
-    public func checksums(id: String, format: DatasetFormat) async throws -> DatasetChecksums {
+    public func checksums(id: String, format: DatabaseFormat) async throws -> DbChecksums {
         try await withRetry(retries) {
             let output = try await api.databaseChecksum(
                 query: .init(id: id, format: .init(format)),
@@ -56,7 +56,7 @@ public struct DatabaseAPI: Sendable {
             guard case .ok(let ok) = output else {
                 throw unexpected(output)
             }
-            return DatasetChecksums(try ok.body.json.checksums)
+            return DbChecksums(try ok.body.json.checksums)
         }
     }
 
@@ -81,7 +81,7 @@ public struct DatabaseAPI: Sendable {
     /// The default transport refuses redirects outright. If you supplied your
     /// own and it follows them, this throws rather than handing back a URL,
     /// because by then the transport is holding the dataset.
-    public func downloadURL(id: String, format: DatasetFormat) async throws -> URL {
+    public func downloadURL(id: String, format: DatabaseFormat) async throws -> URL {
         try await withRetry(retries) {
             let output = try await api.downloadDatabase(
                 query: .init(id: id, format: .init(format)),
@@ -113,7 +113,7 @@ public struct DatabaseAPI: Sendable {
     /// different problems, and flattening both into one kind hides the one you
     /// can do something about.
     @discardableResult
-    public func download(_ id: String, format: DatasetFormat, to fileURL: URL) async throws -> Int64 {
+    public func download(_ id: String, format: DatabaseFormat, to fileURL: URL) async throws -> Int64 {
         let manager = FileManager.default
         let partial = fileURL.appendingPathExtension("part")
         guard manager.createFile(atPath: partial.path, contents: nil) else {
@@ -148,9 +148,9 @@ public struct DatabaseAPI: Sendable {
     /// queueing behind it.
     @discardableResult
     public func download(
-        _ id: String, format: DatasetFormat, to sink: DownloadSink,
+        _ id: String, format: DatabaseFormat, to sink: DownloadSink,
     ) async throws -> Int64 {
-        let body = try await datasetFile(id, format)
+        let body = try await databaseFile(id, format)
         var written: Int64 = 0
         for try await chunk in body {
             try await sink(chunk)
@@ -167,7 +167,7 @@ public struct DatabaseAPI: Sendable {
     /// fail outright. Reach for this at the small end, where the bytes are going
     /// straight into a parser; use ``download(_:format:to:)`` for anything you
     /// have not measured.
-    public func downloadBytes(_ id: String, format: DatasetFormat) async throws -> Data {
+    public func downloadBytes(_ id: String, format: DatabaseFormat) async throws -> Data {
         var data = Data()
         _ = try await download(id, format: format) { chunk in
             data.append(contentsOf: chunk)
@@ -183,7 +183,7 @@ public struct DatabaseAPI: Sendable {
     // The body is returned unread. AsyncHTTPClient's deadline covers only the
     // time to the response head, so a multi-gigabyte transfer is not racing the
     // transport's request timeout.
-    private func datasetFile(_ id: String, _ format: DatasetFormat) async throws -> HTTPBody {
+    private func databaseFile(_ id: String, _ format: DatabaseFormat) async throws -> HTTPBody {
         let url = try await downloadURL(id: id, format: format)
         let (origin, path) = try split(url)
         return try await withRetry(retries) {
@@ -236,7 +236,7 @@ private func split(_ url: URL) throws -> (origin: URL, path: String) {
 ///
 /// Not every dataset is built in every format: the `_provider` catalogs are
 /// keyed by provider id rather than by IP range, so no MMDB exists for them.
-public enum DatasetFormat: String, Sendable, Hashable, CaseIterable {
+public enum DatabaseFormat: String, Sendable, Hashable, CaseIterable {
     case csvgz
     case mmdb
 }
@@ -246,7 +246,7 @@ public enum DatasetFormat: String, Sendable, Hashable, CaseIterable {
 /// A license is held against the family, while a download names a version, so
 /// the ids the download and checksum methods take come from ``versions`` rather
 /// than from this type.
-public struct LicensedDataset: Sendable, Hashable {
+public struct Database: Sendable, Hashable {
     /// The dataset family, e.g. `vpn_ip`. What the license is held against.
     public let base: String
     public let name: String
@@ -267,7 +267,7 @@ public struct LicensedDataset: Sendable, Hashable {
     public let inTerm: Bool
     public let standing: Standing
     /// Every published version of this family.
-    public let versions: [LicensedVersion]
+    public let versions: [DatabaseVersion]
 
     public enum LicenseType: String, Sendable, Hashable, CaseIterable {
         case evaluation
@@ -287,19 +287,19 @@ public struct LicensedDataset: Sendable, Hashable {
 }
 
 /// One published version of a licensed family.
-public struct LicensedVersion: Sendable, Hashable {
+public struct DatabaseVersion: Sendable, Hashable {
     /// The versioned dataset id, e.g. `vpn_ip_v1`. This is what a download takes.
     public let id: String
     public let version: Int
     public let summary: String?
-    public let formats: [DatasetFormatSize]
+    public let formats: [DatabaseFormatSize]
     /// The formats an evaluation sample is published in, if any.
-    public let sampleFormats: [DatasetFormat]
+    public let sampleFormats: [DatabaseFormat]
 }
 
 /// The published size of one dataset in one format.
-public struct DatasetFormatSize: Sendable, Hashable {
-    public let format: DatasetFormat
+public struct DatabaseFormatSize: Sendable, Hashable {
+    public let format: DatabaseFormat
     /// Size of the published file, or `nil` when it has not been published yet.
     public let bytes: Int64?
 }
@@ -308,7 +308,7 @@ public struct DatasetFormatSize: Sendable, Hashable {
 ///
 /// Poll this to decide whether today's build is worth fetching: it carries
 /// `updated` and `entries` without downloading anything.
-public struct DatasetMetadata: Sendable, Hashable {
+public struct DatabaseMetadata: Sendable, Hashable {
     public let id: String
     /// How often a new build is published.
     public let updateFreq: String?
@@ -351,7 +351,7 @@ public struct Download: Sendable, Hashable {
 
 /// The digests published alongside one dataset file. Which ones are present
 /// varies by dataset, so all four are optional.
-public struct DatasetChecksums: Sendable, Hashable {
+public struct DbChecksums: Sendable, Hashable {
     public let md5: String?
     public let sha1: String?
     public let sha256: String?
@@ -364,8 +364,12 @@ private func unexpected(_ output: some Sendable) -> VPNDetectionError {
 
 // Exhaustive rather than a two-way test, so a format added to the spec is a
 // compile error here instead of silently arriving as csvgz.
-extension Operations.DownloadDatabase.Input.Query.FormatPayload {
-    init(_ format: DatasetFormat) {
+//
+// ONE conversion now: the spec names the enum, so the generator emits a single
+// `Components.Schemas.DatabaseFormat` rather than a separate inline payload per
+// call site - there used to be three of these, and they could drift.
+extension Components.Schemas.DatabaseFormat {
+    init(_ format: DatabaseFormat) {
         switch format {
         case .csvgz: self = .csvgz
         case .mmdb: self = .mmdb
@@ -373,17 +377,8 @@ extension Operations.DownloadDatabase.Input.Query.FormatPayload {
     }
 }
 
-extension Operations.DatabaseChecksum.Input.Query.FormatPayload {
-    init(_ format: DatasetFormat) {
-        switch format {
-        case .csvgz: self = .csvgz
-        case .mmdb: self = .mmdb
-        }
-    }
-}
-
-extension LicensedDataset {
-    init(_ wire: Components.Schemas.LicensedDataset) {
+extension Database {
+    init(_ wire: Components.Schemas.Database) {
         self.base = wire.base
         self.name = wire.name
         self.summary = wire.summary
@@ -394,12 +389,12 @@ extension LicensedDataset {
         self.noticeDueAt = wire.noticeDueAt
         self.inTerm = wire.inTerm
         self.standing = Standing(wire.standing)
-        self.versions = wire.versions.map(LicensedVersion.init)
+        self.versions = wire.versions.map(DatabaseVersion.init)
     }
 }
 
-extension LicensedDataset.Standing {
-    init(_ wire: Components.Schemas.LicensedDataset.StandingPayload) {
+extension Database.Standing {
+    init(_ wire: Components.Schemas.Standing) {
         switch wire {
         case .expired: self = .expired
         case .licensed: self = .licensed
@@ -408,18 +403,18 @@ extension LicensedDataset.Standing {
     }
 }
 
-extension LicensedVersion {
-    init(_ wire: Components.Schemas.LicensedVersion) {
+extension DatabaseVersion {
+    init(_ wire: Components.Schemas.DatabaseVersion) {
         self.id = wire.id
         self.version = wire.version
         self.summary = wire.summary
-        self.formats = wire.formats.map(DatasetFormatSize.init)
-        self.sampleFormats = (wire.sampleFormats ?? []).map(DatasetFormat.init)
+        self.formats = wire.formats.map(DatabaseFormatSize.init)
+        self.sampleFormats = (wire.sampleFormats ?? []).map(DatabaseFormat.init)
     }
 }
 
-extension DatasetFormat {
-    init(_ wire: Components.Schemas.LicensedVersion.SampleFormatsPayloadPayload) {
+extension DatabaseFormat {
+    init(_ wire: Components.Schemas.DatabaseFormat) {
         switch wire {
         case .csvgz: self = .csvgz
         case .mmdb: self = .mmdb
@@ -427,8 +422,8 @@ extension DatasetFormat {
     }
 }
 
-extension LicensedDataset.LicenseType {
-    init(_ wire: Components.Schemas.LicensedDataset.LicenseTypePayload) {
+extension Database.LicenseType {
+    init(_ wire: Components.Schemas.LicenseType) {
         switch wire {
         case .evaluation: self = .evaluation
         case .standard: self = .standard
@@ -437,8 +432,8 @@ extension LicensedDataset.LicenseType {
     }
 }
 
-extension DatasetFormatSize {
-    init(_ wire: Components.Schemas.DatasetFormatSize) {
+extension DatabaseFormatSize {
+    init(_ wire: Components.Schemas.DatabaseFormatSize) {
         self.format =
             switch wire.format {
             case .csvgz: .csvgz
@@ -448,8 +443,8 @@ extension DatasetFormatSize {
     }
 }
 
-extension DatasetMetadata {
-    init(_ wire: Components.Schemas.DatasetMetadata) {
+extension DatabaseMetadata {
+    init(_ wire: Components.Schemas.DatabaseMetadata) {
         self.id = wire.id
         self.updateFreq = wire.updateFreq
         self.updated = wire.updated
@@ -463,7 +458,7 @@ extension DatasetMetadata {
 }
 
 extension DatasetColumn {
-    init(_ wire: Components.Schemas.DatasetMetadataColumn) {
+    init(_ wire: Components.Schemas.DatabaseMetadataColumn) {
         self.name = wire.name
         self.type = wire._type
         self.description = wire.description
@@ -480,8 +475,8 @@ extension Download {
     }
 }
 
-extension DatasetChecksums {
-    init(_ wire: Operations.DatabaseChecksum.Output.Ok.Body.JsonPayload.ChecksumsPayload) {
+extension DbChecksums {
+    init(_ wire: Components.Schemas.DbChecksums) {
         self.md5 = wire.md5
         self.sha1 = wire.sha1
         self.sha256 = wire.sha256

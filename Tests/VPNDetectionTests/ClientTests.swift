@@ -234,7 +234,7 @@ struct ClientTests {
         #expect(checksums.sha512 == "cf83e")
     }
 
-    @Test("dataset metadata unwraps schema, sample and size")
+    @Test("database metadata unwraps schema, sample and size")
     func metadataUnwrapsItsNestedMaps() async throws {
         let stub = StubTransport([
             "/api/v1/database/metadata": .json([
@@ -268,11 +268,11 @@ struct ClientTests {
     // The licence is held against the FAMILY, and the ids a download takes hang
     // off `versions`. A listing that stopped at the family would leave a caller
     // with nothing to pass to `download`.
-    @Test("the licensed dataset list carries each family's versions and license term")
+    @Test("the licensed database list carries each family's versions and license term")
     func listCarriesVersionsAndTerm() async throws {
         let stub = StubTransport([
             "/api/v1/database/list": .json([
-                "datasets": [[
+                "databases": [[
                     "base": "vpn_ip",
                     "name": "VPN IP",
                     "summary": "vpn_ip rows",
@@ -289,20 +289,20 @@ struct ClientTests {
                         "formats": [
                             ["format": "mmdb", "bytes": 42], ["format": "csvgz", "bytes": nil],
                         ],
-                        "sampleFormats": ["csvgz"],
+                        "sample_formats": ["csvgz"],
                     ]],
                 ]]
             ])
         ])
 
-        let datasets = try await client(stub, apiKey: "key").database.list()
+        let databases = try await client(stub, apiKey: "key").database.list()
 
-        #expect(datasets.count == 1)
-        #expect(datasets[0].base == "vpn_ip")
-        #expect(datasets[0].licenseType == .standard)
-        #expect(datasets[0].standing == .licensed)
-        #expect(datasets[0].inTerm)
-        let version = try #require(datasets[0].versions.first)
+        #expect(databases.count == 1)
+        #expect(databases[0].base == "vpn_ip")
+        #expect(databases[0].licenseType == .standard)
+        #expect(databases[0].standing == .licensed)
+        #expect(databases[0].inTerm)
+        let version = try #require(databases[0].versions.first)
         #expect(version.id == "vpn_ip_extended_v1")
         #expect(version.version == 1)
         #expect(version.formats.map(\.format) == [.mmdb, .csvgz])
@@ -317,20 +317,20 @@ struct ClientTests {
     func licenseDatesDecodeEitherWay() async throws {
         let stub = StubTransport([
             "/api/v1/database/list": .json([
-                "datasets": [
+                "databases": [
                     family("vpn_ip", starts: "2026-09-04T07:49:45.118Z"),
                     family("cdn_ip", starts: "2026-09-04T07:49:45Z"),
                 ]
             ])
         ])
 
-        let datasets = try await client(stub, apiKey: "key").database.list()
+        let databases = try await client(stub, apiKey: "key").database.list()
 
-        #expect(datasets.count == 2)
-        for dataset in datasets {
-            #expect(dataset.starts != nil, "\(dataset.base) lost its start date")
+        #expect(databases.count == 2)
+        for database in databases {
+            #expect(database.starts != nil, "\(database.base) lost its start date")
         }
-        #expect(datasets[0].starts == datasets[1].starts?.addingTimeInterval(0.118))
+        #expect(databases[0].starts == databases[1].starts?.addingTimeInterval(0.118))
     }
 
     @Test("a 404 from a bad dataset id is not retried")

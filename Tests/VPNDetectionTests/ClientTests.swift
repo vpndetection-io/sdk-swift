@@ -580,4 +580,88 @@ extension ClientTests {
             ),
         )
     }
+    nonisolated(unsafe) static let accountBody: [String: Any] = [
+        "org_id": "85bb51e4-2eb6-4a31-8e4d-02ba8b98fe61",
+        "apikey": [
+            "id": "0ab424cc-7619-4dad-b027-afacdc2cedb0",
+            "expires": NSNull(),
+            "allowed_cidrs": [String](),
+        ],
+        "plan": ["key": "max", "tier": "max"],
+        "usage": [
+            "requests": 580,
+            "quota": 5_000_000,
+            "hard_limit": NSNull(),
+            "window_start": "2026-09-04T07:00:00Z",
+            "window_end": "2026-10-04T07:00:00Z",
+        ],
+    ]
+
+    @Test("myIP classifies the calling address")
+    func myIPClassifiesTheCallingAddress() async throws {
+        let stub = StubTransport(["myip": .json(["ip": "45.83.91.1", "is_vpn": true])])
+        let client = client(stub)
+
+        let result = try await client.myIP()
+
+        #expect(result.ip == "45.83.91.1")
+        #expect(result.isVpn)
+    }
+
+    // The cache is keyed by address, and which address this is IS the question:
+    // a machine that moves between networks would otherwise be told where it
+    // used to be.
+    @Test("myIP is not cached")
+    func myIPIsNotCached() async throws {
+        let stub = StubTransport(["myip": .json(["ip": "45.83.91.1", "is_vpn": true])])
+        let client = client(stub)
+
+        _ = try await client.myIP()
+        _ = try await client.myIP()
+
+        await #expect(stub.callCount == 2)
+    }
+
+    @Test("myAccount reports the plan and the usage")
+    func myAccountReportsThePlanAndTheUsage() async throws {
+        let stub = StubTransport(["/api/v1/account/me": .json(Self.accountBody)])
+        let client = client(stub)
+
+        let account = try await client.myAccount()
+
+        #expect(account.plan.key == "max")
+        #expect(account.plan.tier == .max)
+        #expect(account.usage.requests == 580)
+        #expect(account.usage.quota == 5_000_000)
+        // nil means NEVER stop, which is not the same as a limit of zero.
+        #expect(account.usage.hardLimit == nil)
+        #expect(account.apikey.allowedCIDRs.isEmpty)
+        #expect(account.apikey.expires == nil)
+    }
+
+    // The whole point is what has been spent.
+    @Test("myAccount is not cached")
+    func myAccountIsNotCached() async throws {
+        let stub = StubTransport(["/api/v1/account/me": .json(Self.accountBody)])
+        let client = client(stub)
+
+        _ = try await client.myAccount()
+        _ = try await client.myAccount()
+
+        await #expect(stub.callCount == 2)
+    }
+
+    // Unlike a lookup there is no useful unauthenticated answer.
+    @Test("myAccount surfaces an unauthorized key")
+    func myAccountSurfacesAnUnauthorizedKey() async throws {
+        let stub = StubTransport(
+            ["/api/v1/account/me": .json(["error": "invalid API key"], status: 401)],
+        )
+        let client = client(stub, retries: 0)
+
+        await #expect(throws: VPNDetectionError.self) {
+            _ = try await client.myAccount()
+        }
+    }
+
 }

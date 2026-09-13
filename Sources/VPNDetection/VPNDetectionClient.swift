@@ -93,6 +93,62 @@ public struct VPNDetectionClient: Sendable {
         return result
     }
 
+    /// Classify the address this client is calling from.
+    ///
+    /// The same answer ``lookup(_:retries:)`` would give for that address, at
+    /// the same cost against your allowance. The address is the one our edge
+    /// observed, so a call made through a proxy or a VPN reports the exit it
+    /// left through - usually the point of asking.
+    ///
+    /// Deliberately NOT cached. The cache is keyed by address, and which
+    /// address this is IS the question: a machine that moves between networks
+    /// would otherwise be told where it used to be.
+    ///
+    /// - Parameter retries: Overrides the client's retry count for this call.
+    public func myIP(retries: Int? = nil) async throws -> LookupResult {
+        try await withRetry(retries ?? self.retries) {
+            let output = try await api.lookupMyIp()
+            guard case .ok(let ok) = output else {
+                throw VPNDetectionError(
+                    kind: .serverError, message: "unexpected response: \(output)",
+                )
+            }
+            return LookupResult(try ok.body.json)
+        }
+    }
+
+    /// What this client's key is entitled to, and how much of it has been used.
+    ///
+    /// Named for what it answers rather than `me`, which sits one letter from
+    /// ``myIP(retries:)`` and means something quite different: one is which
+    /// address you are calling FROM, the other is which account you are calling
+    /// AS.
+    ///
+    /// Unlike a lookup there is no useful unauthenticated answer, so a client
+    /// built without an API key gets an unauthorized error rather than a
+    /// partial one.
+    ///
+    /// Usage counts against the ALLOWANCE WINDOW - the anniversary of the
+    /// subscription, not the calendar month and not the billing period - and it
+    /// is the same number a lookup is gated on. It can lag by a few seconds,
+    /// because requests are counted in memory and flushed in aggregate.
+    ///
+    /// Deliberately NOT cached: the whole point is what has been spent, and a
+    /// cached answer is a wrong one within seconds of the next request.
+    ///
+    /// - Parameter retries: Overrides the client's retry count for this call.
+    public func myAccount(retries: Int? = nil) async throws -> Account {
+        try await withRetry(retries ?? self.retries) {
+            let output = try await api.accountMe()
+            guard case .ok(let ok) = output else {
+                throw VPNDetectionError(
+                    kind: .serverError, message: "unexpected response: \(output)",
+                )
+            }
+            return Account(try ok.body.json)
+        }
+    }
+
     /// Classify many addresses concurrently.
     ///
     /// Duplicates in the input collapse to a single request, bogons never reach

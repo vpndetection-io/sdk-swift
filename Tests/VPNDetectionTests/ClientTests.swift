@@ -624,7 +624,7 @@ extension ClientTests {
 
     @Test("myEntitlement reports the plan and the usage")
     func myEntitlementReportsThePlanAndTheUsage() async throws {
-        let stub = StubTransport(["/api/v1/entitlement/me": .json(Self.entitlementBody)])
+        let stub = StubTransport(["/api/v1/entitlement": .json(Self.entitlementBody)])
         let client = client(stub)
 
         let ent = try await client.myEntitlement()
@@ -642,7 +642,7 @@ extension ClientTests {
     // The whole point is what has been spent.
     @Test("myEntitlement is not cached")
     func myEntitlementIsNotCached() async throws {
-        let stub = StubTransport(["/api/v1/entitlement/me": .json(Self.entitlementBody)])
+        let stub = StubTransport(["/api/v1/entitlement": .json(Self.entitlementBody)])
         let client = client(stub)
 
         _ = try await client.myEntitlement()
@@ -655,7 +655,7 @@ extension ClientTests {
     @Test("myEntitlement surfaces an unauthorized key")
     func myEntitlementSurfacesAnUnauthorizedKey() async throws {
         let stub = StubTransport(
-            ["/api/v1/entitlement/me": .json(["error": "invalid API key"], status: 401)],
+            ["/api/v1/entitlement": .json(["error": "invalid API key"], status: 401)],
         )
         let client = client(stub, retries: 0)
 

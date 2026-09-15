@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Everything here describes the key that asked: there is no way to enquire
 /// about another organization, because the credential IS the question.
-public struct Account: Sendable, Hashable {
+public struct Entitlement: Sendable, Hashable {
     /// The organization the key belongs to.
     public let orgID: String
     public let apikey: Apikey
@@ -61,8 +61,8 @@ public struct Account: Sendable, Hashable {
     }
 }
 
-extension Account {
-    init(_ wire: Components.Schemas.AccountMe) {
+extension Entitlement {
+    init(_ wire: Components.Schemas.Entitlement) {
         self.orgID = wire.orgId
         self.apikey = Apikey(wire.apikey)
         self.plan = Plan(wire.plan)
@@ -70,23 +70,23 @@ extension Account {
     }
 }
 
-extension Account.Apikey {
-    init(_ wire: Components.Schemas.AccountApikey) {
+extension Entitlement.Apikey {
+    init(_ wire: Components.Schemas.EntitlementApikey) {
         self.id = wire.id
         self.expires = wire.expires
         self.allowedCIDRs = wire.allowedCidrs
     }
 }
 
-extension Account.Plan {
-    init(_ wire: Components.Schemas.AccountPlan) {
+extension Entitlement.Plan {
+    init(_ wire: Components.Schemas.EntitlementPlan) {
         self.key = wire.key
         self.tier = Tier(wire.tier)
     }
 }
 
-extension Account.Plan.Tier {
-    init(_ wire: Components.Schemas.AccountPlan.TierPayload) {
+extension Entitlement.Plan.Tier {
+    init(_ wire: Components.Schemas.EntitlementPlan.TierPayload) {
         switch wire {
         case .free: self = .free
         case .starter: self = .starter
@@ -96,8 +96,8 @@ extension Account.Plan.Tier {
     }
 }
 
-extension Account.Usage {
-    init(_ wire: Components.Schemas.AccountUsage) {
+extension Entitlement.Usage {
+    init(_ wire: Components.Schemas.EntitlementUsage) {
         self.requests = wire.requests
         self.quota = wire.quota
         self.hardLimit = wire.hardLimit

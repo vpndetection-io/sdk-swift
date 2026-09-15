@@ -73,7 +73,7 @@ Same answer `lookup` would give for that address, and the same cost against your
 ### Your plan and usage
 
 ```swift
-let acct = try await client.myAccount()
+let acct = try await client.myEntitlement()
 print(acct.plan.key)          // max
 print(acct.usage.requests)    // 580
 print(acct.usage.windowEnd)   // when the allowance resets

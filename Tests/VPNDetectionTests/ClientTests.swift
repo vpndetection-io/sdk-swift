@@ -580,7 +580,7 @@ extension ClientTests {
             ),
         )
     }
-    nonisolated(unsafe) static let accountBody: [String: Any] = [
+    nonisolated(unsafe) static let entitlementBody: [String: Any] = [
         "org_id": "85bb51e4-2eb6-4a31-8e4d-02ba8b98fe61",
         "apikey": [
             "id": "0ab424cc-7619-4dad-b027-afacdc2cedb0",
@@ -622,45 +622,45 @@ extension ClientTests {
         await #expect(stub.callCount == 2)
     }
 
-    @Test("myAccount reports the plan and the usage")
-    func myAccountReportsThePlanAndTheUsage() async throws {
-        let stub = StubTransport(["/api/v1/account/me": .json(Self.accountBody)])
+    @Test("myEntitlement reports the plan and the usage")
+    func myEntitlementReportsThePlanAndTheUsage() async throws {
+        let stub = StubTransport(["/api/v1/entitlement/me": .json(Self.entitlementBody)])
         let client = client(stub)
 
-        let account = try await client.myAccount()
+        let ent = try await client.myEntitlement()
 
-        #expect(account.plan.key == "max")
-        #expect(account.plan.tier == .max)
-        #expect(account.usage.requests == 580)
-        #expect(account.usage.quota == 5_000_000)
+        #expect(ent.plan.key == "max")
+        #expect(ent.plan.tier == .max)
+        #expect(ent.usage.requests == 580)
+        #expect(ent.usage.quota == 5_000_000)
         // nil means NEVER stop, which is not the same as a limit of zero.
-        #expect(account.usage.hardLimit == nil)
-        #expect(account.apikey.allowedCIDRs.isEmpty)
-        #expect(account.apikey.expires == nil)
+        #expect(ent.usage.hardLimit == nil)
+        #expect(ent.apikey.allowedCIDRs.isEmpty)
+        #expect(ent.apikey.expires == nil)
     }
 
     // The whole point is what has been spent.
-    @Test("myAccount is not cached")
-    func myAccountIsNotCached() async throws {
-        let stub = StubTransport(["/api/v1/account/me": .json(Self.accountBody)])
+    @Test("myEntitlement is not cached")
+    func myEntitlementIsNotCached() async throws {
+        let stub = StubTransport(["/api/v1/entitlement/me": .json(Self.entitlementBody)])
         let client = client(stub)
 
-        _ = try await client.myAccount()
-        _ = try await client.myAccount()
+        _ = try await client.myEntitlement()
+        _ = try await client.myEntitlement()
 
         await #expect(stub.callCount == 2)
     }
 
     // Unlike a lookup there is no useful unauthenticated answer.
-    @Test("myAccount surfaces an unauthorized key")
-    func myAccountSurfacesAnUnauthorizedKey() async throws {
+    @Test("myEntitlement surfaces an unauthorized key")
+    func myEntitlementSurfacesAnUnauthorizedKey() async throws {
         let stub = StubTransport(
-            ["/api/v1/account/me": .json(["error": "invalid API key"], status: 401)],
+            ["/api/v1/entitlement/me": .json(["error": "invalid API key"], status: 401)],
         )
         let client = client(stub, retries: 0)
 
         await #expect(throws: VPNDetectionError.self) {
-            _ = try await client.myAccount()
+            _ = try await client.myEntitlement()
         }
     }
 

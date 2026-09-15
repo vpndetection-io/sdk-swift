@@ -121,8 +121,8 @@ public struct VPNDetectionClient: Sendable {
     ///
     /// Named for what it answers rather than `me`, which sits one letter from
     /// ``myIP(retries:)`` and means something quite different: one is which
-    /// address you are calling FROM, the other is which account you are calling
-    /// AS.
+    /// address you are calling FROM, the other is what the key you are calling
+    /// WITH may spend.
     ///
     /// Unlike a lookup there is no useful unauthenticated answer, so a client
     /// built without an API key gets an unauthorized error rather than a
@@ -137,15 +137,15 @@ public struct VPNDetectionClient: Sendable {
     /// cached answer is a wrong one within seconds of the next request.
     ///
     /// - Parameter retries: Overrides the client's retry count for this call.
-    public func myAccount(retries: Int? = nil) async throws -> Account {
+    public func myEntitlement(retries: Int? = nil) async throws -> Entitlement {
         try await withRetry(retries ?? self.retries) {
-            let output = try await api.accountMe()
+            let output = try await api.myEntitlement()
             guard case .ok(let ok) = output else {
                 throw VPNDetectionError(
                     kind: .serverError, message: "unexpected response: \(output)",
                 )
             }
-            return Account(try ok.body.json)
+            return Entitlement(try ok.body.json)
         }
     }
 

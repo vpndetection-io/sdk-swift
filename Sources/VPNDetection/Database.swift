@@ -444,7 +444,7 @@ extension DatabaseFormatSize {
             case .csvgz: .csvgz
             case .mmdb: .mmdb
             }
-        self.bytes = wire.bytes.map(Int64.init)
+        self.bytes = wire.bytes
     }
 }
 
@@ -458,7 +458,7 @@ extension DatabaseMetadata {
         self.sample = (wire.sample?.additionalProperties ?? [:]).mapValues { rows in
             rows.map { $0.value.mapValues(JSONValue.init) }
         }
-        self.size = (wire.size?.additionalProperties ?? [:]).mapValues(Int64.init)
+        self.size = wire.size?.additionalProperties ?? [:]
     }
 }
 
@@ -475,7 +475,7 @@ extension Download {
         self.datasetId = wire.datasetId
         self.format = wire.format
         self.outcome = Outcome(rawValue: wire.outcome.rawValue) ?? .unknown
-        self.bytes = wire.bytes.map(Int64.init)
+        self.bytes = wire.bytes
         self.created = wire.created
     }
 }

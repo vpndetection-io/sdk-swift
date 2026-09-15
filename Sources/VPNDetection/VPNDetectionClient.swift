@@ -13,6 +13,10 @@ import OpenAPIRuntime
 public struct VPNDetectionClient: Sendable {
     public static let defaultBaseURL = URL(string: "https://api.vpndetection.io")!
 
+    /// The most addresses `POST /batch` takes in one call; a larger batch is
+    /// sent in chunks of this size.
+    static let batchMax = 1000
+
     /// The licensed dataset downloads, for keys that carry the `db.download` scope.
     public let database: DatabaseAPI
 
@@ -149,14 +153,17 @@ public struct VPNDetectionClient: Sendable {
         }
     }
 
-    /// Classify many addresses concurrently.
+    /// Classifies many addresses in as few requests as possible.
     ///
-    /// Duplicates in the input collapse to a single request, bogons never reach
-    /// the network, and the answers come back keyed by address in input order.
-    /// An address that fails carries its error as its value.
-    ///
-    /// - Throws: Only if the surrounding task is cancelled. A per-address
-    ///   failure is a value in the result, not a thrown error.
+    /// Bogons are answered locally and cached answers are reused; everything
+    /// else goes to `POST /batch` in chunks of up to 1000 addresses, with at
+    /// most `concurrency` chunks in flight. Keyed by address rather than
+    /// positional, so duplicates in the input collapse to a single entry and the
+    /// caller never has to line two lists up. An address that fails carries its
+    /// error as its value, so one bad entry cannot lose the rest of the answers:
+    /// the API reports a per-entry failure with the status the single lookup
+    /// would have answered, and a chunk that fails as a whole marks every
+    /// address in it.
     public func lookupBatch(
         _ ips: some Sequence<String>, options: BatchOptions = BatchOptions(),
     ) async throws -> BatchResults {
@@ -171,23 +178,41 @@ public struct VPNDetectionClient: Sendable {
 
         var outcomes: [String: BatchResults.Outcome] = [:]
         outcomes.reserveCapacity(keys.count)
+        var pending: [String] = []
+        for ip in keys {
+            if isBogon(ip) {
+                outcomes[ip] = .success(LookupResult.bogon(ip))
+                continue
+            }
+            if let hit = await cache?.get(ip) {
+                outcomes[ip] = .success(hit)
+                continue
+            }
+            pending.append(ip)
+        }
+        let chunks = stride(from: 0, to: pending.count, by: Self.batchMax).map {
+            Array(pending[$0..<min($0 + Self.batchMax, pending.count)])
+        }
+
         // Primed with `limit` children and topped back up as each one lands, so
-        // peak in-flight is the limit rather than the size of the input, and a
+        // peak in-flight is the limit rather than the number of chunks, and a
         // per-call limit has no shared limiter that could cap it.
-        try await withThrowingTaskGroup(of: (String, BatchResults.Outcome).self) { group in
+        try await withThrowingTaskGroup(of: [(String, BatchResults.Outcome)].self) { group in
             var next = 0
-            while next < min(limit, keys.count) {
-                guard group.addTaskUnlessCancelled(operation: lookupTask(keys[next], options)) else {
+            while next < min(limit, chunks.count) {
+                guard group.addTaskUnlessCancelled(operation: chunkTask(chunks[next], options)) else {
                     break
                 }
                 next += 1
             }
-            while let (ip, outcome) = try await group.next() {
-                outcomes[ip] = outcome
-                guard next < keys.count else {
+            while let answers = try await group.next() {
+                for (ip, outcome) in answers {
+                    outcomes[ip] = outcome
+                }
+                guard next < chunks.count else {
                     continue
                 }
-                group.addTask(operation: lookupTask(keys[next], options))
+                group.addTask(operation: chunkTask(chunks[next], options))
                 next += 1
             }
         }
@@ -198,18 +223,51 @@ public struct VPNDetectionClient: Sendable {
         return BatchResults(keys: keys, outcomes: outcomes)
     }
 
-    private func lookupTask(
-        _ ip: String, _ options: BatchOptions,
-    ) -> @Sendable () async throws -> (String, BatchResults.Outcome) {
+    /// One `POST /batch`, mapped back onto the addresses it was asked about. A
+    /// chunk-level failure - the call refused, the transport failing, the
+    /// retries exhausted - becomes every address's error, exactly as it would
+    /// have been had each been looked up alone.
+    private func chunkTask(
+        _ chunk: [String], _ options: BatchOptions,
+    ) -> @Sendable () async throws -> [(String, BatchResults.Outcome)] {
         { [self] in
+            let body: Components.Schemas.BatchLookupResponse
             do {
-                return (ip, .success(try await lookup(ip, retries: options.retries)))
+                body = try await withRetry(options.retries ?? retries) {
+                    let output = try await api.lookupBatch(.init(body: .json(.init(ips: chunk))))
+                    guard case .ok(let ok) = output else {
+                        throw VPNDetectionError(
+                            kind: .serverError, message: "unexpected response: \(output)",
+                        )
+                    }
+                    return try ok.body.json
+                }
             } catch is CancellationError {
-                // The batch is being torn down; that is not this address failing.
+                // The batch is being torn down; that is not this chunk failing.
                 throw CancellationError()
             } catch {
-                return (ip, .failure(VPNDetectionError.wrapping(error)))
+                let failure = VPNDetectionError.wrapping(error)
+                return chunk.map { ($0, .failure(failure)) }
             }
+            var answers: [(String, BatchResults.Outcome)] = []
+            answers.reserveCapacity(chunk.count)
+            for ip in chunk {
+                if let served = body.results.additionalProperties[ip] {
+                    let result = LookupResult(served)
+                    await cache?.set(ip, result)
+                    answers.append((ip, .success(result)))
+                    continue
+                }
+                if let failed = body.errors.additionalProperties[ip] {
+                    let error = VPNDetectionError.fromEntry(status: failed.status, message: failed.error)
+                    answers.append((ip, .failure(error)))
+                    continue
+                }
+                answers.append((ip, .failure(VPNDetectionError(
+                    kind: .serverError, message: "the batch answer did not include \(ip)", status: 200,
+                ))))
+            }
+            return answers
         }
     }
 }
@@ -224,7 +282,7 @@ extension VPNDetectionClient {
         public var baseURL: URL
         /// Set to `nil` to disable caching.
         public var cache: CacheOptions?
-        /// Concurrent in-flight requests during a batch. Default 8.
+        /// Concurrent batch requests - chunks of up to 1000 addresses - during a batch. Default 8.
         public var concurrency: Int
         /// Retry attempts for a transient failure. Default 2.
         public var retries: Int
@@ -258,7 +316,7 @@ extension VPNDetectionClient {
     /// one and ignored it would pass any test that only checked the option was
     /// accepted.
     public struct BatchOptions: Sendable, Hashable {
-        /// Concurrent in-flight requests for THIS batch only.
+        /// Concurrent batch requests - chunks of up to 1000 addresses - for THIS batch only.
         public var concurrency: Int?
         /// Retry attempts for a transient failure, for THIS batch only.
         public var retries: Int?

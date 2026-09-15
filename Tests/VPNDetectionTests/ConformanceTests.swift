@@ -115,10 +115,11 @@ struct ConformanceTests {
 
         #expect(results.keys == testCase.expect.keys)
         for ip in testCase.expect.errorKeys ?? [] {
-            guard case .failure = results[ip] else {
+            guard case .failure(let error) = results[ip] else {
                 Issue.record("\(ip) should carry its own error")
                 continue
             }
+            #expect(error.kind.rawValue == testCase.expect.errorKinds?[ip], "\(ip)")
         }
         #expect(try results["1.1.1.1"]?.get().isVpn == false, "the good address still answered")
     }
@@ -131,6 +132,48 @@ struct ConformanceTests {
 
         for _ in 0..<(testCase.repeat ?? 1) {
             _ = try await client.lookupBatch(testCase.input)
+        }
+        await #expect(stub.callCount == testCase.expect.httpRequests)
+    }
+
+    @Test("a large batch is sent in chunks of a thousand")
+    func largeBatchIsSentInChunksOfAThousand() async throws {
+        let testCase = corpus.batchCase("chunks-of-one-thousand")
+        let stub = StubTransport(StubTransport.answers(for: testCase.input))
+        let client = VPNDetectionClient(options: .init(cache: nil, transport: stub))
+
+        let results = try await client.lookupBatch(testCase.input)
+
+        #expect(results.count == testCase.expect.keyCount)
+        await #expect(stub.callCount == testCase.expect.httpRequests)
+        for ip in testCase.input {
+            #expect(try results[ip]?.get().ip == ip, "\(ip) should be answered for itself")
+        }
+    }
+
+    // A per-entry failure carries no headers, so its 429 can only be a spent
+    // allowance, and a 500 is the server's; neither is retried per entry, because
+    // retries belong to the call and the call succeeded.
+    @Test("an entry error is classified by its status")
+    func entryErrorIsClassifiedByItsStatus() async throws {
+        let testCase = corpus.batchCase("an-entry-error-is-classified-by-its-status")
+        var routes = StubTransport.answers(for: ["1.1.1.1"])
+        routes["8.8.8.8"] = .json(
+            ["error": "request allowance exceeded; raise or remove your overage limit"], status: 429,
+        )
+        routes["9.9.9.9"] = .json(["error": "lookup failed"], status: 500)
+        let stub = StubTransport(routes)
+        let client = testClient(stub, retries: 3)
+
+        let results = try await client.lookupBatch(testCase.input)
+
+        #expect(results.keys == testCase.expect.keys)
+        for (ip, kind) in testCase.expect.errorKinds ?? [:] {
+            guard case .failure(let error) = results[ip] else {
+                Issue.record("\(ip) should carry its error")
+                continue
+            }
+            #expect(error.kind.rawValue == kind, "\(ip)")
         }
         await #expect(stub.callCount == testCase.expect.httpRequests)
     }

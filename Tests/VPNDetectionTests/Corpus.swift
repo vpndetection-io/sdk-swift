@@ -67,10 +67,12 @@ struct Corpus: Decodable, Sendable {
         let expect: Expect
 
         struct Expect: Decodable, Sendable {
-            let keys: [String]
+            let keys: [String]?
             let httpRequests: Int?
             let bogonKeys: [String]?
             let errorKeys: [String]?
+            let keyCount: Int?
+            let errorKinds: [String: String]?
         }
     }
 

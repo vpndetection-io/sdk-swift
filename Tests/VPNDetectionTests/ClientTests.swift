@@ -8,7 +8,10 @@ import Testing
 /// The Swift API surface, as distinct from the shared conformance corpus.
 @Suite("Client")
 struct ClientTests {
-    static let manyAddresses = (1...12).map { "9.9.9.\($0)" }
+    // Enough addresses for seven chunks of the batch endpoint's 1000, so a
+    // concurrency bound has something to bound: one request per chunk, and only
+    // the chunks overlap.
+    static let manyAddresses = (0..<6001).map { "9.\(1 + $0 / 65536).\($0 / 256 % 256).\($0 % 256)" }
 
     // Peak in-flight is the only measurement that tells a real limit from an
     // option that was accepted and ignored.
@@ -21,7 +24,7 @@ struct ClientTests {
 
         _ = try await client.lookupBatch(Self.manyAddresses, options: .init(concurrency: 3))
 
-        await #expect(stub.callCount == Self.manyAddresses.count)
+        await #expect(stub.callCount == 7, "one request per chunk of 1000")
         await #expect(stub.peakInFlight <= 3)
         await #expect(stub.peakInFlight > 1, "requests never overlapped")
     }

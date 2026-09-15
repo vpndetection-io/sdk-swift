@@ -93,6 +93,14 @@ extension VPNDetectionError {
         }
     }
 
+    /// A per-entry failure inside a successful batch: the status the single
+    /// lookup would have answered, and its message, with no headers at all - so
+    /// a 429 here is a spent allowance, which is the only kind the API puts in
+    /// an entry.
+    static func fromEntry(status: Int, message: String) -> VPNDetectionError {
+        from(status: status, headers: HTTPFields(), body: [], fallback: message)
+    }
+
     /// Reduces anything thrown beneath the idiomatic layer to one error type.
     ///
     /// The generated client wraps whatever the transport or a middleware threw

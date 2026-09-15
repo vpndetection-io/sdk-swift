@@ -68,9 +68,15 @@ final class StubTransport: ClientTransport {
             throw error
         }
 
-        // An unrouted address answers the way the API does, so a batch case can
-        // exercise a partial failure without a second stub.
-        let route = routes[key] ?? .json(["error": "not a valid IP address"], status: 400)
+        // A batch is answered from the addresses in its body rather than from
+        // the path. An unrouted address answers the way the API does, so a batch
+        // case can exercise a partial failure without a second stub.
+        let route: Route
+        if request.method == .post, key == "batch" {
+            route = try await batchRoute(body)
+        } else {
+            route = routes[key] ?? .json(["error": "not a valid IP address"], status: 400)
+        }
         var fields = HTTPFields()
         fields[.contentType] = "application/json"
         for (name, value) in route.headers {
@@ -82,6 +88,32 @@ final class StubTransport: ClientTransport {
         let response = HTTPResponse(status: .init(code: route.status), headerFields: fields)
         await state.leave()
         return (response, route.body.map { HTTPBody([UInt8]($0)) })
+    }
+
+    // A POST /batch is answered the way the API answers one: every address the
+    // table knows is a result if its route is a 200 and an entry error otherwise,
+    // and an unknown address is the 400 the API gives a string that is not one.
+    // One call however many addresses, which is what the request counts measure.
+    private func batchRoute(_ body: HTTPBody?) async throws -> Route {
+        let bytes = try await ArraySlice(collecting: body ?? HTTPBody(), upTo: 1 << 20)
+        let decoded = try JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any]
+        let ips = decoded?["ips"] as? [String] ?? []
+        var results: [String: Any] = [:]
+        var failures: [String: Any] = [:]
+        for ip in ips {
+            guard let route = routes[ip] else {
+                failures[ip] = ["status": 400, "error": "not a valid IP address"]
+                continue
+            }
+            let answer = route.body.flatMap { try? JSONSerialization.jsonObject(with: $0) } ?? [:]
+            if route.status == 200 {
+                results[ip] = answer
+                continue
+            }
+            let message = (answer as? [String: Any])?["error"] as? String ?? "request failed"
+            failures[ip] = ["status": route.status, "error": message]
+        }
+        return .json(["results": results, "errors": failures])
     }
 
     // The lookup path is the address itself; anything else is keyed by its path

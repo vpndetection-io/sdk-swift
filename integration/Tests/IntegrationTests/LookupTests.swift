@@ -134,10 +134,11 @@ struct LookupTests {
         let results = try await client.lookupBatch([probe, "8.8.8.8", probe, "10.0.0.1", "8.8.8.8"])
 
         #expect(results.keys == [probe, "8.8.8.8", "10.0.0.1"])
-        // Distinct paths rather than a call count, so a retry against a wobbling
-        // staging cannot read as a failure to deduplicate.
+        // The two routable addresses go out together as one POST /batch. Distinct
+        // paths rather than a call count, so a retry against a wobbling staging
+        // cannot read as a failure to deduplicate.
         let asked = Set(await transport.facts.map(\.path))
-        #expect(asked == ["/\(probe)", "/8.8.8.8"])
+        #expect(asked == ["/batch"])
         #expect(try results["10.0.0.1"]?.get().isBogon == true)
         for ip in [probe, "8.8.8.8"] {
             assertShape(try #require(results[ip]).get())

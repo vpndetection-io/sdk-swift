@@ -147,3 +147,82 @@ func withRetry<T>(_ retries: Int, _ operation: () async throws -> T) async throw
 private func backoff(_ attempt: Int) -> Duration {
     .milliseconds(min(5_000, 200 << min(attempt, 5)))
 }
+
+/// Bounds one attempt with a deadline the library owns, or runs it unbounded
+/// when `timeout` is `nil`.
+///
+/// Raced rather than left to cancellation: cancelling the attempt releases its
+/// connection, but only a transport that HONORS cancellation then returns, and
+/// one supplied through ``VPNDetectionClient/Options/transport`` need not. So
+/// the caller is answered at the deadline, and the attempt is cancelled and
+/// left to finish on its own.
+func withDeadline<T: Sendable>(
+    _ timeout: Duration?, _ operation: @escaping @Sendable () async throws -> T,
+) async throws -> T {
+    guard let timeout else {
+        return try await operation()
+    }
+    precondition(timeout > .zero, "timeout must be positive")
+    let race = Race<T>()
+    let attempt = Task {
+        do {
+            race.settle(.success(try await operation()))
+        } catch {
+            race.settle(.failure(error))
+        }
+    }
+    let timer = Task {
+        try await Task.sleep(for: timeout)
+        race.settle(.failure(VPNDetectionError(
+            kind: .network, message: "the request timed out after \(timeout)",
+        )))
+    }
+    defer {
+        attempt.cancel()
+        timer.cancel()
+    }
+    return try await withTaskCancellationHandler {
+        try await race.value
+    } onCancel: {
+        race.settle(.failure(CancellationError()))
+    }
+}
+
+/// An outcome decided once, by whichever side of a race gets there first.
+///
+/// A lock rather than an actor, because the cancellation handler that settles
+/// it is synchronous and cannot wait for one.
+private final class Race<T: Sendable>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var outcome: Result<T, any Error>?
+    private var waiter: CheckedContinuation<T, any Error>?
+
+    var value: T {
+        get async throws {
+            try await withCheckedThrowingContinuation { continuation in
+                let decided: Result<T, any Error>? = lock.withLock {
+                    if outcome == nil {
+                        waiter = continuation
+                    }
+                    return outcome
+                }
+                if let decided {
+                    continuation.resume(with: decided)
+                }
+            }
+        }
+    }
+
+    func settle(_ result: Result<T, any Error>) {
+        let waiting: CheckedContinuation<T, any Error>? = lock.withLock {
+            guard outcome == nil else {
+                return nil
+            }
+            outcome = result
+            let waiting = waiter
+            waiter = nil
+            return waiting
+        }
+        waiting?.resume(with: result)
+    }
+}

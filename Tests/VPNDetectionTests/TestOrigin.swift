@@ -20,6 +20,8 @@ final class TestOrigin: Sendable {
         var complete: Bool = true
         /// Drop the connection after the body, so a promised length never arrives.
         var closeAfterBody: Bool = false
+        /// Take the request and never answer it at all, not even with a head.
+        var silent: Bool = false
     }
 
     let port: Int
@@ -113,6 +115,9 @@ final class TestOrigin: Sendable {
             log.record(path, authorization: authorization)
 
             let answer = answer(path)
+            guard !answer.silent else {
+                return
+            }
             var headers = HTTPHeaders()
             for (name, value) in answer.headers {
                 headers.add(name: name, value: value)
@@ -162,6 +167,21 @@ extension TestOrigin.Answer {
             body: Array(repeating: 0x41, count: written),
             complete: false,
             closeAfterBody: true,
+        )
+    }
+
+    /// Takes the request and never answers, with the connection held open.
+    static var silence: Self {
+        .init(silent: true)
+    }
+
+    /// A lookup answer whose head arrives and whose body stops part way.
+    static var stalledLookup: Self {
+        .init(
+            status: .ok,
+            headers: [("Content-Type", "application/json"), ("Content-Length", "64")],
+            body: Array(#"{"ip":"#.utf8),
+            complete: false,
         )
     }
 

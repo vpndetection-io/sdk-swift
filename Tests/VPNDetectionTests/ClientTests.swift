@@ -54,6 +54,29 @@ struct ClientTests {
         await #expect(stub.peakInFlight <= 2)
     }
 
+    // No cap on what one call accepts: chunking to the endpoint's 1000 is the
+    // library's job, so 2,500 addresses is three requests rather than an error.
+    @Test("a batch is never capped, and goes out as one POST per chunk of 1000")
+    func aBatchIsNeverCapped() async throws {
+        let addresses = (0..<2500).map { "9.9.\($0 / 256).\($0 % 256)" }
+        let stub = StubTransport(StubTransport.answers(for: addresses))
+        let client = client(stub, cache: nil)
+
+        let results = try await client.lookupBatch(addresses)
+
+        // The stub answers a batch only as a POST, so an answered address is one
+        // that went out that way.
+        await #expect(stub.calls == ["batch", "batch", "batch"])
+        #expect(results.keys == addresses)
+        for ip in addresses {
+            guard case .success(let result) = results[ip] else {
+                Issue.record("\(ip) was not answered")
+                continue
+            }
+            #expect(result.ip == ip)
+        }
+    }
+
     @Test("retries are configurable per call")
     func retriesAreConfigurablePerCall() async throws {
         let stub = StubTransport([

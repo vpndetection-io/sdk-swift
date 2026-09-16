@@ -100,10 +100,10 @@ for (ip, outcome) in results {
 
 Results are keyed by address, in the order you first listed each one, so duplicates in your list collapse into a single entry and one address failing never loses the rest: it carries its error as its value, with the status the API would have given that address on its own. `results["8.8.8.8"]` gets one back on its own, and `results.keys` is the order you passed in.
 
-How many chunks are in flight at once, and how many times a failed chunk is retried, are configurable per call:
+How many chunks are in flight at once, how many times a failed chunk is retried, and how long each attempt at a chunk may take, are configurable per call:
 
 ```swift
-let results = try await client.lookupBatch(manyIps, options: .init(concurrency: 4, retries: 4))
+let results = try await client.lookupBatch(manyIps, options: .init(concurrency: 4, retries: 4, timeout: .seconds(10)))
 ```
 
 ### Caching
@@ -167,6 +167,12 @@ do {
 `kind` is one of `badRequest`, `unauthorized`, `forbidden`, `rateLimited`, `quotaExceeded`, `serverError` or `network`.
 
 Note that `rateLimited` and `quotaExceeded` both arrive as HTTP 429 and are not the same thing. A rate limit is when the API faces extreme traffic bursts and so retrying later works; but a spent quota needs your allowance raised or the window to roll over. The library retries rate limits for you, but not if your quota is exceeded.
+
+A call can bound how long each attempt may take, and one that runs out fails as a retryable `network` error:
+
+```swift
+let result = try await client.lookup("45.83.91.1", timeout: .seconds(5))
+```
 
 ### Database downloads
 

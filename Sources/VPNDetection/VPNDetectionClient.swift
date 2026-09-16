@@ -64,7 +64,7 @@ public struct VPNDetectionClient: Sendable {
     /// multicast or otherwise not routable, including the IPv6 equivalents and
     /// the 6to4 and Teredo ranges.
     ///
-    /// These are the addresses ``lookup(_:retries:)`` answers locally. Exposed
+    /// These are the addresses ``lookup(_:retries:timeout:)`` answers locally. Exposed
     /// here so the check is reachable from the client you already hold; the same
     /// function is also available on its own as ``VPNDetection/isBogon(_:)``.
     public func isBogon(_ ip: String) -> Bool {
@@ -76,8 +76,15 @@ public struct VPNDetectionClient: Sendable {
     /// A bogon is answered locally and never reaches the network. Everything
     /// else is served, then cached for this instance.
     ///
-    /// - Parameter retries: Overrides the client's retry count for this call.
-    public func lookup(_ ip: String, retries: Int? = nil) async throws -> LookupResult {
+    /// - Parameters:
+    ///   - retries: Overrides the client's retry count for this call.
+    ///   - timeout: Bounds each attempt, from sending the request to decoding the
+    ///     answer. Left `nil`, only the transport's own bound applies; the default
+    ///     transport's gives up on a response head that takes over 60 seconds, and
+    ///     a longer `timeout` does not lengthen that.
+    public func lookup(
+        _ ip: String, retries: Int? = nil, timeout: Duration? = nil,
+    ) async throws -> LookupResult {
         if isBogon(ip) {
             return LookupResult.bogon(ip)
         }
@@ -85,13 +92,15 @@ public struct VPNDetectionClient: Sendable {
             return hit
         }
         let result = try await withRetry(retries ?? self.retries) {
-            let output = try await api.lookupIp(path: .init(ip: ip))
-            guard case .ok(let ok) = output else {
-                throw VPNDetectionError(
-                    kind: .serverError, message: "unexpected response: \(output)",
-                )
+            try await withDeadline(timeout) {
+                let output = try await api.lookupIp(path: .init(ip: ip))
+                guard case .ok(let ok) = output else {
+                    throw VPNDetectionError(
+                        kind: .serverError, message: "unexpected response: \(output)",
+                    )
+                }
+                return LookupResult(try ok.body.json)
             }
-            return LookupResult(try ok.body.json)
         }
         await cache?.set(ip, result)
         return result
@@ -99,7 +108,7 @@ public struct VPNDetectionClient: Sendable {
 
     /// Classify the address this client is calling from.
     ///
-    /// The same answer ``lookup(_:retries:)`` would give for that address, at
+    /// The same answer ``lookup(_:retries:timeout:)`` would give for that address, at
     /// the same cost against your allowance. The address is the one our edge
     /// observed, so a call made through a proxy or a VPN reports the exit it
     /// left through - usually the point of asking.
@@ -108,23 +117,27 @@ public struct VPNDetectionClient: Sendable {
     /// address this is IS the question: a machine that moves between networks
     /// would otherwise be told where it used to be.
     ///
-    /// - Parameter retries: Overrides the client's retry count for this call.
-    public func myIP(retries: Int? = nil) async throws -> LookupResult {
+    /// - Parameters:
+    ///   - retries: Overrides the client's retry count for this call.
+    ///   - timeout: Bounds each attempt, as on ``lookup(_:retries:timeout:)``.
+    public func myIP(retries: Int? = nil, timeout: Duration? = nil) async throws -> LookupResult {
         try await withRetry(retries ?? self.retries) {
-            let output = try await api.lookupMyIp()
-            guard case .ok(let ok) = output else {
-                throw VPNDetectionError(
-                    kind: .serverError, message: "unexpected response: \(output)",
-                )
+            try await withDeadline(timeout) {
+                let output = try await api.lookupMyIp()
+                guard case .ok(let ok) = output else {
+                    throw VPNDetectionError(
+                        kind: .serverError, message: "unexpected response: \(output)",
+                    )
+                }
+                return LookupResult(try ok.body.json)
             }
-            return LookupResult(try ok.body.json)
         }
     }
 
     /// What this client's key is entitled to, and how much of it has been used.
     ///
     /// Named for what it answers rather than `me`, which sits one letter from
-    /// ``myIP(retries:)`` and means something quite different: one is which
+    /// ``myIP(retries:timeout:)`` and means something quite different: one is which
     /// address you are calling FROM, the other is what the key you are calling
     /// WITH may spend.
     ///
@@ -140,16 +153,22 @@ public struct VPNDetectionClient: Sendable {
     /// Deliberately NOT cached: the whole point is what has been spent, and a
     /// cached answer is a wrong one within seconds of the next request.
     ///
-    /// - Parameter retries: Overrides the client's retry count for this call.
-    public func myEntitlement(retries: Int? = nil) async throws -> Entitlement {
+    /// - Parameters:
+    ///   - retries: Overrides the client's retry count for this call.
+    ///   - timeout: Bounds each attempt, as on ``lookup(_:retries:timeout:)``.
+    public func myEntitlement(
+        retries: Int? = nil, timeout: Duration? = nil,
+    ) async throws -> Entitlement {
         try await withRetry(retries ?? self.retries) {
-            let output = try await api.myEntitlement()
-            guard case .ok(let ok) = output else {
-                throw VPNDetectionError(
-                    kind: .serverError, message: "unexpected response: \(output)",
-                )
+            try await withDeadline(timeout) {
+                let output = try await api.myEntitlement()
+                guard case .ok(let ok) = output else {
+                    throw VPNDetectionError(
+                        kind: .serverError, message: "unexpected response: \(output)",
+                    )
+                }
+                return Entitlement(try ok.body.json)
             }
-            return Entitlement(try ok.body.json)
         }
     }
 
@@ -234,13 +253,15 @@ public struct VPNDetectionClient: Sendable {
             let body: Components.Schemas.BatchLookupResponse
             do {
                 body = try await withRetry(options.retries ?? retries) {
-                    let output = try await api.lookupBatch(.init(body: .json(.init(ips: chunk))))
-                    guard case .ok(let ok) = output else {
-                        throw VPNDetectionError(
-                            kind: .serverError, message: "unexpected response: \(output)",
-                        )
+                    try await withDeadline(options.timeout) {
+                        let output = try await api.lookupBatch(.init(body: .json(.init(ips: chunk))))
+                        guard case .ok(let ok) = output else {
+                            throw VPNDetectionError(
+                                kind: .serverError, message: "unexpected response: \(output)",
+                            )
+                        }
+                        return try ok.body.json
                     }
-                    return try ok.body.json
                 }
             } catch is CancellationError {
                 // The batch is being torn down; that is not this chunk failing.
@@ -311,7 +332,7 @@ extension VPNDetectionClient {
     /// Per-call overrides for one batch. Anything left `nil` falls back to the
     /// client's setting.
     ///
-    /// There is deliberately no equivalent on ``lookup(_:retries:)``: a
+    /// There is deliberately no equivalent on ``lookup(_:retries:timeout:)``: a
     /// concurrency for a single address is meaningless, and a type that accepted
     /// one and ignored it would pass any test that only checked the option was
     /// accepted.
@@ -320,10 +341,15 @@ extension VPNDetectionClient {
         public var concurrency: Int?
         /// Retry attempts for a transient failure, for THIS batch only.
         public var retries: Int?
+        /// How long one attempt at one chunk may take, for THIS batch only. A chunk
+        /// that runs out of it marks every address in it with a retryable network
+        /// error. Bounded as on ``VPNDetectionClient/lookup(_:retries:timeout:)``.
+        public var timeout: Duration?
 
-        public init(concurrency: Int? = nil, retries: Int? = nil) {
+        public init(concurrency: Int? = nil, retries: Int? = nil, timeout: Duration? = nil) {
             self.concurrency = concurrency
             self.retries = retries
+            self.timeout = timeout
         }
     }
 }

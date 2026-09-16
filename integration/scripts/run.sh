@@ -28,7 +28,7 @@ cd "$(dirname "$0")/.."
 PACKAGE_URL="https://github.com/vpndetection-io/sdk-swift.git"
 # Mirrors the range in Package.swift. Both are read by hand rather than parsed:
 # a manifest is Swift, and the gate has to run before anything is built.
-RANGE_LOW="4.0.0"
+RANGE_LOW="4.2.0"
 RANGE_HIGH="5.0.0"
 
 IMAGE="${SWIFT_IMAGE:-swift:6.3}"

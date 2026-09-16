@@ -22,6 +22,9 @@ final class TestOrigin: Sendable {
         var closeAfterBody: Bool = false
         /// Take the request and never answer it at all, not even with a head.
         var silent: Bool = false
+        /// Write the body one byte at a time, this far apart, so no single read
+        /// ever waits long while the whole body takes as long as it likes.
+        var trickle: TimeAmount?
     }
 
     let port: Int
@@ -124,6 +127,11 @@ final class TestOrigin: Sendable {
             }
             let head = HTTPResponseHead(version: .http1_1, status: answer.status, headers: headers)
             context.write(wrapOutboundOut(.head(head)), promise: nil)
+            if let every = answer.trickle {
+                context.flush()
+                trickle(answer.body[...], every: every, complete: answer.complete, context: context)
+                return
+            }
             if !answer.body.isEmpty {
                 var buffer = context.channel.allocator.buffer(capacity: answer.body.count)
                 buffer.writeBytes(answer.body)
@@ -135,6 +143,23 @@ final class TestOrigin: Sendable {
             context.flush()
             if answer.closeAfterBody {
                 context.close(promise: nil)
+            }
+        }
+
+        private func trickle(
+            _ rest: ArraySlice<UInt8>, every: TimeAmount, complete: Bool, context: ChannelHandlerContext,
+        ) {
+            context.eventLoop.assumeIsolated().scheduleTask(in: every) {
+                guard let byte = rest.first else {
+                    if complete {
+                        context.writeAndFlush(self.wrapOutboundOut(.end(nil)), promise: nil)
+                    }
+                    return
+                }
+                var buffer = context.channel.allocator.buffer(capacity: 1)
+                buffer.writeInteger(byte)
+                context.writeAndFlush(self.wrapOutboundOut(.body(.byteBuffer(buffer))), promise: nil)
+                self.trickle(rest.dropFirst(), every: every, complete: complete, context: context)
             }
         }
     }
@@ -182,6 +207,30 @@ extension TestOrigin.Answer {
             headers: [("Content-Type", "application/json"), ("Content-Length", "64")],
             body: Array(#"{"ip":"#.utf8),
             complete: false,
+        )
+    }
+
+    /// A whole lookup answer, one byte every 20 ms: about 620 ms in all, and never
+    /// more than 20 ms between two bytes.
+    static var trickledLookup: Self {
+        let body = Array(#"{"ip":"9.9.9.9","is_vpn":false}"#.utf8)
+        return .init(
+            status: .ok,
+            headers: [("Content-Type", "application/json"), ("Content-Length", "\(body.count)")],
+            body: body,
+            trickle: .milliseconds(20),
+        )
+    }
+
+    /// A small dataset, one byte every 20 ms.
+    static func trickled(_ bytes: [UInt8]) -> Self {
+        .init(
+            status: .ok,
+            headers: [
+                ("Content-Type", "application/octet-stream"), ("Content-Length", "\(bytes.count)"),
+            ],
+            body: bytes,
+            trickle: .milliseconds(20),
         )
     }
 

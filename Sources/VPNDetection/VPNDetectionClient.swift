@@ -20,14 +20,20 @@ public struct VPNDetectionClient: Sendable {
     /// The licensed dataset downloads, for keys that carry the `db.download` scope.
     public let database: DatabaseAPI
 
+    /// Sign a person in with OAuth's device flow and receive one of their API
+    /// keys. Its requests never carry this client's key.
+    public let oauth: OauthAPI
+
     private let api: Client
     private let cache: ResultCache?
     private let concurrency: Int
     private let retries: Int
+    private let timeout: Duration
 
     public init(options: Options = Options()) {
         precondition(options.concurrency > 0, "concurrency must be positive")
         precondition(options.retries >= 0, "retries cannot be negative")
+        precondition(options.timeout > .zero, "timeout must be positive")
 
         var middlewares: [any ClientMiddleware] = []
         // An empty key is treated as no key. It is what an unset environment
@@ -52,7 +58,14 @@ public struct VPNDetectionClient: Sendable {
         self.cache = options.cache.map(ResultCache.init)
         self.concurrency = options.concurrency
         self.retries = options.retries
-        self.database = DatabaseAPI(api: api, transport: transport, retries: options.retries)
+        self.timeout = options.timeout
+        self.database = DatabaseAPI(
+            api: api, transport: transport, retries: options.retries, timeout: options.timeout,
+        )
+        self.oauth = OauthAPI(
+            transport: transport, baseURL: options.baseURL, retries: options.retries,
+            timeout: options.timeout,
+        )
     }
 
     /// A client that presents `apiKey` and takes every other default.
@@ -78,10 +91,9 @@ public struct VPNDetectionClient: Sendable {
     ///
     /// - Parameters:
     ///   - retries: Overrides the client's retry count for this call.
-    ///   - timeout: Bounds each attempt, from sending the request to decoding the
-    ///     answer. Left `nil`, only the transport's own bound applies; the default
-    ///     transport's gives up on a response head that takes over 60 seconds, and
-    ///     a longer `timeout` does not lengthen that.
+    ///   - timeout: Overrides the client's ``Options/timeout`` for this call, in
+    ///     either direction. It bounds each attempt, from sending the request to
+    ///     decoding the answer.
     public func lookup(
         _ ip: String, retries: Int? = nil, timeout: Duration? = nil,
     ) async throws -> LookupResult {
@@ -92,7 +104,7 @@ public struct VPNDetectionClient: Sendable {
             return hit
         }
         let result = try await withRetry(retries ?? self.retries) {
-            try await withDeadline(timeout) {
+            try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.lookupIp(path: .init(ip: ip))
                 guard case .ok(let ok) = output else {
                     throw VPNDetectionError(
@@ -122,7 +134,7 @@ public struct VPNDetectionClient: Sendable {
     ///   - timeout: Bounds each attempt, as on ``lookup(_:retries:timeout:)``.
     public func myIP(retries: Int? = nil, timeout: Duration? = nil) async throws -> LookupResult {
         try await withRetry(retries ?? self.retries) {
-            try await withDeadline(timeout) {
+            try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.lookupMyIp()
                 guard case .ok(let ok) = output else {
                     throw VPNDetectionError(
@@ -160,7 +172,7 @@ public struct VPNDetectionClient: Sendable {
         retries: Int? = nil, timeout: Duration? = nil,
     ) async throws -> Entitlement {
         try await withRetry(retries ?? self.retries) {
-            try await withDeadline(timeout) {
+            try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.myEntitlement()
                 guard case .ok(let ok) = output else {
                     throw VPNDetectionError(
@@ -183,11 +195,20 @@ public struct VPNDetectionClient: Sendable {
     /// the API reports a per-entry failure with the status the single lookup
     /// would have answered, and a chunk that fails as a whole marks every
     /// address in it.
+    ///
+    /// Throws only when cancelled, or when ``BatchOptions/concurrency`` is below
+    /// 1, which is refused as ``VPNDetectionErrorKind/badRequest`` before any
+    /// request.
     public func lookupBatch(
         _ ips: some Sequence<String>, options: BatchOptions = BatchOptions(),
     ) async throws -> BatchResults {
         let limit = options.concurrency ?? concurrency
-        precondition(limit > 0, "concurrency must be positive")
+        // A group primed with no children would wait for none, forever.
+        guard limit > 0 else {
+            throw VPNDetectionError(
+                kind: .badRequest, message: "concurrency must be at least 1, got \(limit)",
+            )
+        }
 
         var keys: [String] = []
         var seen: Set<String> = []
@@ -253,7 +274,7 @@ public struct VPNDetectionClient: Sendable {
             let body: Components.Schemas.BatchLookupResponse
             do {
                 body = try await withRetry(options.retries ?? retries) {
-                    try await withDeadline(options.timeout) {
+                    try await withDeadline(options.timeout ?? timeout) {
                         let output = try await api.lookupBatch(.init(body: .json(.init(ips: chunk))))
                         guard case .ok(let ok) = output else {
                             throw VPNDetectionError(
@@ -307,6 +328,12 @@ extension VPNDetectionClient {
         public var concurrency: Int
         /// Retry attempts for a transient failure. Default 2.
         public var retries: Int
+        /// How long one attempt may take, from sending the request to decoding
+        /// the answer. Default 30 seconds. Per ATTEMPT, so a retried call may
+        /// take longer in total, and a call's own `timeout` replaces it in either
+        /// direction. A dataset transfer is bounded only until its response head
+        /// arrives, so a download that takes minutes is not cut off.
+        public var timeout: Duration
         /// Override the HTTP implementation. Anything you supply owns its own
         /// redirect policy, and the download endpoint's `302` must not be
         /// followed; see ``DatabaseAPI/downloadURL(id:format:)``.
@@ -318,6 +345,7 @@ extension VPNDetectionClient {
             cache: CacheOptions? = CacheOptions(),
             concurrency: Int = 8,
             retries: Int = 2,
+            timeout: Duration = .seconds(30),
             transport: (any ClientTransport)? = nil,
         ) {
             self.apiKey = apiKey
@@ -325,6 +353,7 @@ extension VPNDetectionClient {
             self.cache = cache
             self.concurrency = concurrency
             self.retries = retries
+            self.timeout = timeout
             self.transport = transport
         }
     }
@@ -341,9 +370,10 @@ extension VPNDetectionClient {
         public var concurrency: Int?
         /// Retry attempts for a transient failure, for THIS batch only.
         public var retries: Int?
-        /// How long one attempt at one chunk may take, for THIS batch only. A chunk
+        /// How long one attempt at one chunk may take, for THIS batch only, in
+        /// place of the client's ``VPNDetectionClient/Options/timeout``. A chunk
         /// that runs out of it marks every address in it with a retryable network
-        /// error. Bounded as on ``VPNDetectionClient/lookup(_:retries:timeout:)``.
+        /// error.
         public var timeout: Duration?
 
         public init(concurrency: Int? = nil, retries: Int? = nil, timeout: Duration? = nil) {

@@ -15,6 +15,8 @@ struct Corpus: Decodable, Sendable {
     let errors: [ErrorCase]
     let batch: [BatchCase]
     let bogons: BogonTable
+    /// Read loosely, because its cases tell `null` apart from absent.
+    let oauth: JSONValue
 
     struct BogonCase: Decodable, Sendable {
         let ip: String
@@ -109,6 +111,27 @@ extension Corpus {
 }
 
 extension JSONValue {
+    subscript(_ key: String) -> JSONValue? {
+        guard case .object(let members) = self else {
+            return nil
+        }
+        return members[key]
+    }
+
+    var arrayValue: [JSONValue] {
+        guard case .array(let values) = self else {
+            return []
+        }
+        return values
+    }
+
+    var objectValue: [String: JSONValue] {
+        guard case .object(let members) = self else {
+            return [:]
+        }
+        return members
+    }
+
     /// The fixture body as the bytes a server would have sent.
     var encoded: Data {
         guard let data = try? JSONEncoder().encode(self) else {

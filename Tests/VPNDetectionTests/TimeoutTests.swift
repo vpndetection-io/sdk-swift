@@ -5,10 +5,10 @@ import Testing
 
 @testable import VPNDetection
 
-/// The per-call timeout, which bounds each ATTEMPT. Every stall is a real socket
-/// that took the request, and every failure is checked for having taken at least
-/// the timeout: a refused connection is a retryable network error too, and would
-/// otherwise pass for the deadline firing.
+/// The client's timeout and the per-call one, each bounding a whole ATTEMPT. Every
+/// stall is a real socket that took the request, and every failure is checked for
+/// having taken at least the timeout: a refused connection is a retryable network
+/// error too, and would otherwise pass for the deadline firing.
 @Suite("Timeout")
 struct TimeoutTests {
     static let perCall: Duration = .milliseconds(250)
@@ -19,11 +19,11 @@ struct TimeoutTests {
         case lookup, myIP, myEntitlement, batch
     }
 
-    // The default transport's own bound is 60 seconds to the response head, so a
-    // failure inside a few seconds is the per-call value firing.
+    // The client keeps its 30 second default, so a failure inside a few seconds is
+    // the per-call value firing, and on a body that stalled after its head.
     @Test("a per-call timeout fires as a retryable network error", arguments: Call.allCases)
     func perCallTimeoutFires(_ call: Call) async throws {
-        let origin = try await TestOrigin.start { _ in .silence }
+        let origin = try await TestOrigin.start { _ in .stalledLookup }
         defer { Task { try? await origin.stop() } }
         let client = Self.client(origin)
 
@@ -56,17 +56,70 @@ struct TimeoutTests {
 
     // The transport's own bound ends when the head arrives, so nothing else would
     // ever end this call.
-    @Test("a body that stalls after its head is bounded too", .timeLimit(.minutes(1)))
+    @Test("the client's own timeout bounds a body that stalls after its head", .timeLimit(.minutes(1)))
     func aStalledBodyIsBounded() async throws {
         let origin = try await TestOrigin.start { _ in .stalledLookup }
         defer { Task { try? await origin.stop() } }
-        let client = Self.client(origin)
+        let client = Self.client(origin, timeout: .milliseconds(300))
 
+        let started = ContinuousClock.now
         let failure = await #expect(throws: VPNDetectionError.self) {
-            try await client.lookup("9.9.9.9", timeout: Self.perCall)
+            try await client.lookup("9.9.9.9")
         }
 
         #expect(try #require(failure).kind == .network)
+        #expect(ContinuousClock.now - started < .seconds(10))
+    }
+
+    // No single read waits more than 20 ms, so only a bound on the whole attempt
+    // can end this before the answer completes at about 620 ms.
+    @Test("a trickled body is bounded as a whole, not per read", .timeLimit(.minutes(1)))
+    func aTrickledBodyIsBoundedAsAWhole() async throws {
+        let origin = try await TestOrigin.start { _ in .trickledLookup }
+        defer { Task { try? await origin.stop() } }
+        let client = Self.client(origin, timeout: .milliseconds(300))
+
+        let started = ContinuousClock.now
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.lookup("9.9.9.9")
+        }
+
+        #expect(try #require(failure).kind == .network)
+        #expect(ContinuousClock.now - started >= Self.atLeast)
+    }
+
+    // A per-call value written into the client would pass the first call and fail
+    // the second.
+    @Test(
+        "a per-call timeout lengthens the client's, and leaves it for the next call", .timeLimit(.minutes(1)),
+    )
+    func aPerCallTimeoutLengthensTheClients() async throws {
+        let origin = try await TestOrigin.start { _ in .trickledLookup }
+        defer { Task { try? await origin.stop() } }
+        let client = Self.client(origin, timeout: .milliseconds(300))
+
+        let result = try await client.lookup("9.9.9.9", timeout: .seconds(10))
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.myIP()
+        }
+
+        #expect(result.ip == "9.9.9.9")
+        #expect(try #require(failure).kind == .network)
+    }
+
+    @Test("the client's timeout bounds a database call", .timeLimit(.minutes(1)))
+    func aDatabaseCallIsBounded() async throws {
+        let origin = try await TestOrigin.start { _ in .stalledLookup }
+        defer { Task { try? await origin.stop() } }
+        let client = Self.client(origin, timeout: .milliseconds(300))
+
+        let started = ContinuousClock.now
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.database.list()
+        }
+
+        #expect(try #require(failure).kind == .network)
+        #expect(ContinuousClock.now - started < .seconds(10))
     }
 
     // Cancelling releases the connection, but only a transport that HONORS
@@ -100,10 +153,13 @@ struct TimeoutTests {
         #expect(ContinuousClock.now - started < .seconds(2), "the cancellation waited for the deadline")
     }
 
-    static func client(_ origin: TestOrigin, retries: Int = 0) -> VPNDetectionClient {
+    static func client(
+        _ origin: TestOrigin, retries: Int = 0, timeout: Duration = .seconds(30),
+    ) -> VPNDetectionClient {
         VPNDetectionClient(
             options: .init(
                 baseURL: URL(string: "http://127.0.0.1:\(origin.port)")!, cache: nil, retries: retries,
+                timeout: timeout,
             ),
         )
     }

@@ -13,7 +13,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "4.1.0"),
+    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "4.2.0"),
 ]
 ```
 
@@ -168,7 +168,7 @@ do {
 
 Note that `rateLimited` and `quotaExceeded` both arrive as HTTP 429 and are not the same thing. A rate limit is when the API faces extreme traffic bursts and so retrying later works; but a spent quota needs your allowance raised or the window to roll over. The library retries rate limits for you, but not if your quota is exceeded.
 
-A call can bound how long each attempt may take, and one that runs out fails as a retryable `network` error:
+Each attempt is abandoned after 30 seconds by default (`timeout` on the options), which fails as a retryable `network` error. One call can set its own, longer or shorter:
 
 ```swift
 let result = try await client.lookup("45.83.91.1", timeout: .seconds(5))
@@ -196,6 +196,27 @@ let bytes = try await client.database.downloadBytes("cdn_ip_v1", format: .csvgz)
 ```
 
 `downloadBytes` holds the whole file in memory, and the catalog runs from `cdn_ip_v1` at 10 KB to `resproxy_ip_90d_v1` at 1.79 GB, so use `download` for anything you have not measured.
+
+### Sign in with OAuth (device flow)
+
+A program running on the person's own machine can let them sign in with a browser and pick one of their API keys, instead of asking them to paste it:
+
+```swift
+let client = VPNDetectionClient()
+
+let device = try await client.oauth.deviceAuthorization(
+    clientID: "your-client-id", scope: "account.read apikeys.read apikeys.reveal",
+)
+print("Open \(device.verificationURI) and enter \(device.userCode)")
+
+let token = try await client.oauth.pollDeviceToken(device, clientID: "your-client-id")
+guard let apikey = token.apikey else {
+    fatalError("no API key came back: none was picked, or it can't be shown again")
+}
+let keyed = VPNDetectionClient(apiKey: apikey)
+```
+
+A denied sign-in throws `OauthError.accessDenied` and a code that ran out `OauthError.expiredToken`. Client IDs are issued on request from support@vpndetection.io, and `client.oauth.revoke(refreshToken, clientID: "your-client-id")` signs the machine out again.
 
 ### Absent is not false
 

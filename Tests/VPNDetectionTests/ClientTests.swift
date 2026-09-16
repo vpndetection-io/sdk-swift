@@ -77,6 +77,20 @@ struct ClientTests {
         }
     }
 
+    // A group primed with no children waits for none, forever.
+    @Test("a per-call concurrency below 1 is refused before any request", arguments: [0, -1])
+    func concurrencyBelowOneIsRefused(_ concurrency: Int) async throws {
+        let stub = StubTransport.answering("9.9.9.9")
+        let client = client(stub)
+
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.lookupBatch(["9.9.9.9"], options: .init(concurrency: concurrency))
+        }
+
+        #expect(try #require(failure).kind == .badRequest)
+        await #expect(stub.callCount == 0)
+    }
+
     @Test("retries are configurable per call")
     func retriesAreConfigurablePerCall() async throws {
         let stub = StubTransport([
@@ -380,6 +394,7 @@ struct ClientTests {
         // is meaningless, so both trap rather than being quietly repaired.
         #expect(VPNDetectionClient.Options().concurrency == 8)
         #expect(VPNDetectionClient.Options().retries == 2)
+        #expect(VPNDetectionClient.Options().timeout == .seconds(30))
         #expect(VPNDetectionClient.Options().cache?.maxEntries == 10_000)
         #expect(VPNDetectionClient.Options().cache?.ttl == .seconds(3600))
         #expect(VPNDetectionClient.Options().baseURL == VPNDetectionClient.defaultBaseURL)
@@ -498,6 +513,20 @@ struct DownloadTransferTests {
         #expect([UInt8](bytes) == Self.payload)
     }
 
+    // The attempt's deadline has to end at the response head, or it would abandon
+    // any dataset that takes longer to move than a lookup may take.
+    @Test("a slow transfer is not cut off by the client's timeout", .timeLimit(.minutes(1)))
+    func aSlowTransferOutlivesTheTimeout() async throws {
+        let origins = try await Origins.start(.trickled(Self.payload), timeout: .milliseconds(300))
+        defer { origins.stop() }
+
+        let started = ContinuousClock.now
+        let bytes = try await origins.client.database.downloadBytes("cdn_ip_v1", format: .csvgz)
+
+        #expect([UInt8](bytes) == Self.payload)
+        #expect(ContinuousClock.now - started > .milliseconds(300), "the transfer was not slow")
+    }
+
     // Writing straight to the destination passes every other case here, because
     // a refusal fails before any file exists. Only a death mid-body produces the
     // truncated file that would otherwise read as a whole dataset.
@@ -554,7 +583,9 @@ struct DownloadTransferTests {
         let storage: TestOrigin
         let client: VPNDetectionClient
 
-        static func start(_ answer: TestOrigin.Answer) async throws -> Origins {
+        static func start(
+            _ answer: TestOrigin.Answer, timeout: Duration = .seconds(30),
+        ) async throws -> Origins {
             let storage = try await TestOrigin.start { _ in answer }
             let location = "http://127.0.0.1:\(storage.port)/cdn_ip_v1.csv.gz?signature=abc"
             let api = try await TestOrigin.start { _ in .redirect(to: location) }
@@ -566,6 +597,7 @@ struct DownloadTransferTests {
                         apiKey: "key",
                         baseURL: URL(string: "http://127.0.0.1:\(api.port)")!,
                         retries: 0,
+                        timeout: timeout,
                     ),
                 ),
             )

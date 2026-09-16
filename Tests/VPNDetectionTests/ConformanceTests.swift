@@ -136,9 +136,13 @@ struct ConformanceTests {
         await #expect(stub.callCount == testCase.expect.httpRequests)
     }
 
-    @Test("a large batch is sent in chunks of a thousand")
-    func largeBatchIsSentInChunksOfAThousand() async throws {
-        let testCase = corpus.batchCase("chunks-of-one-thousand")
+    // The second case pins that no cap refuses a batch past the endpoint's thousand.
+    @Test(
+        "a large batch is sent in chunks of a thousand",
+        arguments: ["chunks-of-one-thousand", "uncapped-input-is-chunked"],
+    )
+    func largeBatchIsSentInChunksOfAThousand(_ name: String) async throws {
+        let testCase = corpus.batchCase(name)
         let stub = StubTransport(StubTransport.answers(for: testCase.input))
         let client = VPNDetectionClient(options: .init(cache: nil, transport: stub))
 

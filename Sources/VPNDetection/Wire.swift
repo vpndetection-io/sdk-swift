@@ -17,9 +17,14 @@ import OpenAPIRuntime
 /// follows the redirect reads a dataset that routinely runs to gigabytes into
 /// memory. `.disallow` is one value rather than a delegate to get right, and it
 /// behaves identically on Linux and on Apple platforms.
+///
+/// Its own deadline is pushed out of the way. It stops at the response head, and
+/// at its default of a minute it would cut short a client whose own
+/// ``VPNDetectionClient/Options/timeout`` is longer; the library's per-attempt
+/// bound is the one that fires.
 enum DefaultTransport {
     static let shared: any ClientTransport = AsyncHTTPClientTransport(
-        configuration: .init(client: httpClient),
+        configuration: .init(client: httpClient, timeout: .hours(24 * 365)),
     )
 
     private static let httpClient = HTTPClient(
@@ -134,6 +139,11 @@ func withRetry<T>(_ retries: Int, _ operation: () async throws -> T) async throw
             // it. Checking the task is more robust than matching on an error
             // type the transport may have wrapped or renamed.
             try Task.checkCancellation()
+            // An authorization server's refusal is final, and wrapping it would
+            // turn it into a retryable network error.
+            if error is OauthError {
+                throw error
+            }
             let failure = VPNDetectionError.wrapping(error)
             guard attempt < retries, failure.isRetryable else {
                 throw failure
@@ -148,8 +158,7 @@ private func backoff(_ attempt: Int) -> Duration {
     .milliseconds(min(5_000, 200 << min(attempt, 5)))
 }
 
-/// Bounds one attempt with a deadline the library owns, or runs it unbounded
-/// when `timeout` is `nil`.
+/// Bounds one attempt with a deadline the library owns.
 ///
 /// Raced rather than left to cancellation: cancelling the attempt releases its
 /// connection, but only a transport that HONORS cancellation then returns, and
@@ -157,11 +166,8 @@ private func backoff(_ attempt: Int) -> Duration {
 /// the caller is answered at the deadline, and the attempt is cancelled and
 /// left to finish on its own.
 func withDeadline<T: Sendable>(
-    _ timeout: Duration?, _ operation: @escaping @Sendable () async throws -> T,
+    _ timeout: Duration, _ operation: @escaping @Sendable () async throws -> T,
 ) async throws -> T {
-    guard let timeout else {
-        return try await operation()
-    }
     precondition(timeout > .zero, "timeout must be positive")
     let race = Race<T>()
     let attempt = Task {

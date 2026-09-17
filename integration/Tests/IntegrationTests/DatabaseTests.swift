@@ -36,7 +36,7 @@ struct DatabaseTests {
             #expect(dataset.base.isEmpty == false)
             #expect(dataset.name.isEmpty == false)
             // `list` answers the WHOLE catalogue, so an unlicensed family is a
-            // normal row with no licence type at all. Asserting one either way
+            // normal row with no license type at all. Asserting one either way
             // is what tells a nil apart from a value this client cannot read.
             if dataset.standing == .unlicensed {
                 #expect(dataset.licenseType == nil,

@@ -438,7 +438,7 @@ extension DatabaseFormat {
 extension Database.LicenseType {
     /// Failable because the wire enum carries the `null` member the spec needs
     /// for the field to be nullable at all, and the generator spells it
-    /// `._empty_`. That is the absence of a licence, not a kind of one, so it
+    /// `._empty_`. That is the absence of a license, not a kind of one, so it
     /// becomes nil rather than a case nobody can act on.
     init?(_ wire: Components.Schemas.Database.LicenseTypePayload) {
         switch wire {

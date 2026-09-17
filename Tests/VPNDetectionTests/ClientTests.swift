@@ -305,7 +305,7 @@ struct ClientTests {
         #expect(metadata.size["csvgz"] == 5_733_061_000)
     }
 
-    // The licence is held against the FAMILY, and the ids a download takes hang
+    // The license is held against the FAMILY, and the ids a download takes hang
     // off `versions`. A listing that stopped at the family would leave a caller
     // with nothing to pass to `download`.
     @Test("the licensed database list carries each family's versions and license term")

@@ -13,7 +13,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "4.2.0"),
+    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "4.3.0"),
 ]
 ```
 
@@ -168,10 +168,11 @@ do {
 
 Note that `rateLimited` and `quotaExceeded` both arrive as HTTP 429 and are not the same thing. A rate limit is when the API faces extreme traffic bursts and so retrying later works; but a spent quota needs your allowance raised or the window to roll over. The library retries rate limits for you, but not if your quota is exceeded.
 
-Each attempt is abandoned after 30 seconds by default (`timeout` on the options), which fails as a retryable `network` error. One call can set its own, longer or shorter:
+Each attempt is abandoned after 30 seconds by default (`timeout` on the options), which fails as a retryable `network` error. One call can set its own, longer or shorter - `lookup`, `myIP`, `myEntitlement`, a batch, every `oauth` method, and from 4.3.0 every `client.database` call but the transfers:
 
 ```swift
 let result = try await client.lookup("45.83.91.1", timeout: .seconds(5))
+let databases = try await client.database.list(timeout: .seconds(5))
 ```
 
 ### Database downloads
@@ -196,6 +197,14 @@ let bytes = try await client.database.downloadBytes("cdn_ip_v1", format: .csvgz)
 ```
 
 `downloadBytes` holds the whole file in memory, and the catalog runs from `cdn_ip_v1` at 10 KB to `resproxy_ip_90d_v1` at 1.79 GB, so use `download` for anything you have not measured.
+
+From 4.3.0, `list`, `metadata`, `checksums`, `downloads` and `downloadURL` each take a `timeout` bounding each attempt at that one call in place of the client's:
+
+```swift
+let checksums = try await client.database.checksums(id: "vpn_ip_extended_v1", format: .mmdb, timeout: .seconds(5))
+```
+
+The transfers deliberately take none, so there is nothing to pass and a call that tries does not compile rather than accepting the option and quietly doing nothing with it: a dataset runs to gigabytes and minutes, so any bound that suits a JSON call would abandon a healthy download. `downloadURL` does take one, because minting the link is an ordinary API request - it bounds that request, not whatever you do with the link afterwards.
 
 ### Sign in with OAuth (device flow)
 

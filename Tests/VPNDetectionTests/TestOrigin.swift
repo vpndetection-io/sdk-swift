@@ -222,6 +222,19 @@ extension TestOrigin.Answer {
         )
     }
 
+    /// A whole empty dataset listing, one byte every 20 ms: about a second in
+    /// all, and never more than 20 ms between two bytes. Padded, because the
+    /// shortest listing the API can send is over before a deadline worth testing.
+    static var trickledListing: Self {
+        let body = Array((#"{"databases":[]"# + String(repeating: " ", count: 34) + "}").utf8)
+        return .init(
+            status: .ok,
+            headers: [("Content-Type", "application/json"), ("Content-Length", "\(body.count)")],
+            body: body,
+            trickle: .milliseconds(20),
+        )
+    }
+
     /// A small dataset, one byte every 20 ms.
     static func trickled(_ bytes: [UInt8]) -> Self {
         .init(

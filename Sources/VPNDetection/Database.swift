@@ -10,6 +10,12 @@ public typealias DownloadSink = (ArraySlice<UInt8>) async throws -> Void
 ///
 /// Reached as ``VPNDetectionClient/database``; there is no reason to build one
 /// directly.
+///
+/// Every call here that asks the API a question takes a `timeout`, bounding each
+/// ATTEMPT of that one call in place of the client's. The transfers take none
+/// and there is no argument to pass: a dataset runs to gigabytes and minutes, so
+/// any bound that suits a JSON call would abandon a healthy download, and a call
+/// that tries to set one does not compile rather than being quietly ignored.
 public struct DatabaseAPI: Sendable {
     private let api: Client
     private let transport: any ClientTransport
@@ -24,9 +30,12 @@ public struct DatabaseAPI: Sendable {
     }
 
     /// The dataset families your organization is licensed to download.
-    public func list() async throws -> [Database] {
+    ///
+    /// - Parameter timeout: Overrides the client's ``VPNDetectionClient/Options/timeout``
+    ///   for each attempt of this call.
+    public func list(timeout: Duration? = nil) async throws -> [Database] {
         try await withRetry(retries) {
-            try await withDeadline(timeout) {
+            try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.listDatabases()
                 guard case .ok(let ok) = output else {
                     throw unexpected(output)
@@ -37,9 +46,12 @@ public struct DatabaseAPI: Sendable {
     }
 
     /// What is inside one dataset: schema, sample rows, row count, sizes.
-    public func metadata(id: String) async throws -> DatabaseMetadata {
+    ///
+    /// - Parameter timeout: Overrides the client's ``VPNDetectionClient/Options/timeout``
+    ///   for each attempt of this call.
+    public func metadata(id: String, timeout: Duration? = nil) async throws -> DatabaseMetadata {
         try await withRetry(retries) {
-            try await withDeadline(timeout) {
+            try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.databaseMetadata(query: .init(id: id))
                 guard case .ok(let ok) = output else {
                     throw unexpected(output)
@@ -54,9 +66,14 @@ public struct DatabaseAPI: Sendable {
     /// Returns the whole set rather than one algorithm: which digests a dataset
     /// publishes is the API's choice, not ours, and they arrive nested under
     /// `checksums` rather than at the top level.
-    public func checksums(id: String, format: DatabaseFormat) async throws -> DbChecksums {
+    ///
+    /// - Parameter timeout: Overrides the client's ``VPNDetectionClient/Options/timeout``
+    ///   for each attempt of this call.
+    public func checksums(
+        id: String, format: DatabaseFormat, timeout: Duration? = nil,
+    ) async throws -> DbChecksums {
         try await withRetry(retries) {
-            try await withDeadline(timeout) {
+            try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.databaseChecksum(
                     query: .init(id: id, format: .init(format)),
                 )
@@ -69,9 +86,12 @@ public struct DatabaseAPI: Sendable {
     }
 
     /// Your organization's recent download attempts, newest first.
-    public func downloads(limit: Int? = nil) async throws -> [Download] {
+    ///
+    /// - Parameter timeout: Overrides the client's ``VPNDetectionClient/Options/timeout``
+    ///   for each attempt of this call.
+    public func downloads(limit: Int? = nil, timeout: Duration? = nil) async throws -> [Download] {
         try await withRetry(retries) {
-            try await withDeadline(timeout) {
+            try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.listDownloads(query: .init(limit: limit))
                 guard case .ok(let ok) = output else {
                     throw unexpected(output)
@@ -91,9 +111,15 @@ public struct DatabaseAPI: Sendable {
     /// The default transport refuses redirects outright. If you supplied your
     /// own and it follows them, this throws rather than handing back a URL,
     /// because by then the transport is holding the dataset.
-    public func downloadURL(id: String, format: DatabaseFormat) async throws -> URL {
+    ///
+    /// - Parameter timeout: Overrides the client's ``VPNDetectionClient/Options/timeout``
+    ///   for each attempt at MINTING the link, which is an ordinary API request.
+    ///   It says nothing about the transfer you then run with it.
+    public func downloadURL(
+        id: String, format: DatabaseFormat, timeout: Duration? = nil,
+    ) async throws -> URL {
         try await withRetry(retries) {
-            try await withDeadline(timeout) {
+            try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.downloadDatabase(
                     query: .init(id: id, format: .init(format)),
                 )

@@ -19,6 +19,13 @@ struct TimeoutTests {
         case lookup, myIP, myEntitlement, batch
     }
 
+    /// The database calls that ask the API a question. The transfers are absent
+    /// because they take no per-call timeout at all, which
+    /// ``onlyTheJSONDatabaseCallsTakeATimeout()`` is what asserts.
+    enum DatabaseCall: String, CaseIterable, Sendable {
+        case list, metadata, checksums, downloads, downloadURL
+    }
+
     // The client keeps its 30 second default, so a failure inside a few seconds is
     // the per-call value firing, and on a body that stalled after its head.
     @Test("a per-call timeout fires as a retryable network error", arguments: Call.allCases)
@@ -122,6 +129,93 @@ struct TimeoutTests {
         #expect(ContinuousClock.now - started < .seconds(10))
     }
 
+    // The client keeps its 30 second default, so only the per-call value can end
+    // any of these. The head lands at once and the body then arrives a byte at a
+    // time, so no single read ever waits long enough to be what fired; the
+    // redirect has no body to trickle, so its origin never answers at all.
+    @Test(
+        "a per-call timeout bounds every database call", .timeLimit(.minutes(1)),
+        arguments: DatabaseCall.allCases,
+    )
+    func aPerCallTimeoutBoundsEveryDatabaseCall(_ call: DatabaseCall) async throws {
+        let origin = try await TestOrigin.start { _ in
+            call == .downloadURL ? .silence : .trickledListing
+        }
+        defer { Task { try? await origin.stop() } }
+        let client = Self.client(origin)
+
+        let started = ContinuousClock.now
+        let failure = try await Self.failure(of: call, on: client, timeout: Self.perCall)
+        let elapsed = ContinuousClock.now - started
+
+        #expect(failure.kind == .network)
+        #expect(failure.isRetryable)
+        #expect(failure.message.hasPrefix("the request timed out"), "\(failure.message)")
+        #expect(elapsed >= Self.atLeast, "failed after \(elapsed), before the deadline could fire")
+        // Under the listing's own thousand milliseconds, so a per-call value that
+        // was accepted and ignored cannot pass by the body simply finishing.
+        #expect(elapsed < .milliseconds(900), "failed after \(elapsed), not at the per-call deadline")
+        #expect(origin.receivedPaths.count == 1)
+    }
+
+    // A per-call value kept anywhere but the call itself - written into the client,
+    // or into the API struct it is reached through - passes the first of these and
+    // fails the second.
+    @Test(
+        "a database call with no timeout falls back to the client's", .timeLimit(.minutes(1)),
+    )
+    func aDatabaseCallWithoutAnOverrideUsesTheClients() async throws {
+        let origin = try await TestOrigin.start { _ in .trickledListing }
+        defer { Task { try? await origin.stop() } }
+        let client = Self.client(origin, timeout: .milliseconds(300))
+
+        let databases = try await client.database.list(timeout: .seconds(10))
+        let started = ContinuousClock.now
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.database.downloads()
+        }
+        let elapsed = ContinuousClock.now - started
+
+        #expect(databases.isEmpty)
+        #expect(try #require(failure).kind == .network)
+        #expect(elapsed >= Self.atLeast, "failed after \(elapsed), before the client's deadline could fire")
+        #expect(elapsed < .milliseconds(900), "failed after \(elapsed), not at the client's timeout")
+    }
+
+    // A method reference names every parameter and never applies a default, so
+    // the annotations below ARE the signatures. A `timeout` added to a transfer,
+    // or dropped from a call that asks the API a question, stops this file
+    // compiling - which is how Swift refuses the option rather than accepting it
+    // and quietly doing nothing with it.
+    @Test("every JSON database call takes a per-call timeout, and no transfer does")
+    func onlyTheJSONDatabaseCallsTakeATimeout() async throws {
+        let stub = StubTransport(["/api/v1/database/list": .json(["databases": []])])
+        let client = VPNDetectionClient(options: .init(cache: nil, transport: stub))
+
+        let list: (Duration?) async throws -> [Database] = client.database.list(timeout:)
+        let metadata: (String, Duration?) async throws -> DatabaseMetadata =
+            client.database.metadata(id:timeout:)
+        let checksums: (String, DatabaseFormat, Duration?) async throws -> DbChecksums =
+            client.database.checksums(id:format:timeout:)
+        let downloads: (Int?, Duration?) async throws -> [Download] =
+            client.database.downloads(limit:timeout:)
+        let downloadURL: (String, DatabaseFormat, Duration?) async throws -> URL =
+            client.database.downloadURL(id:format:timeout:)
+
+        let toFile: (String, DatabaseFormat, URL) async throws -> Int64 =
+            client.database.download(_:format:to:)
+        let toSink: (String, DatabaseFormat, DownloadSink) async throws -> Int64 =
+            client.database.download(_:format:to:)
+        let toBytes: (String, DatabaseFormat) async throws -> Data =
+            client.database.downloadBytes(_:format:)
+
+        // One of them is called, so these are live code rather than a comment the
+        // compiler happens to check.
+        #expect(try await list(.seconds(5)).isEmpty)
+        #expect(await stub.callCount == 1)
+        _ = (metadata, checksums, downloads, downloadURL, toFile, toSink, toBytes)
+    }
+
     // Cancelling releases the connection, but only a transport that HONORS
     // cancellation then returns, and a supplied one need not.
     @Test("a transport that ignores cancellation is still bounded", .timeLimit(.minutes(1)))
@@ -187,6 +281,30 @@ struct TimeoutTests {
                 break
             }
             caught = error
+        }
+        return try #require(caught)
+    }
+
+    static func failure(
+        of call: DatabaseCall, on client: VPNDetectionClient, timeout: Duration,
+    ) async throws -> VPNDetectionError {
+        let caught = await #expect(throws: VPNDetectionError.self) {
+            switch call {
+            case .list:
+                _ = try await client.database.list(timeout: timeout)
+            case .metadata:
+                _ = try await client.database.metadata(id: "vpn_ip_extended_v1", timeout: timeout)
+            case .checksums:
+                _ = try await client.database.checksums(
+                    id: "vpn_ip_extended_v1", format: .mmdb, timeout: timeout,
+                )
+            case .downloads:
+                _ = try await client.database.downloads(timeout: timeout)
+            case .downloadURL:
+                _ = try await client.database.downloadURL(
+                    id: "vpn_ip_extended_v1", format: .mmdb, timeout: timeout,
+                )
+            }
         }
         return try #require(caught)
     }

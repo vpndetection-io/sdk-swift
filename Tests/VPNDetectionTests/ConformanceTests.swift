@@ -71,8 +71,14 @@ struct ConformanceTests {
             let route = StubTransport.Route(
                 status: testCase.status, body: testCase.body.encoded, headers: testCase.headers,
             )
-            // No retries, so a retryable failure surfaces rather than looping.
-            let client = testClient(StubTransport(["1.1.1.1": route]), retries: 0)
+            // A non-retryable case is sent with retries ON, so the request count
+            // below is what says it was not retried: with retries off one request
+            // is guaranteed, and a classifier that retried every failure passed
+            // this test unchanged. A retryable case keeps them off so it surfaces
+            // here rather than looping; retriesAreConfigurablePerCall and
+            // rateLimitWaitsForRetryAfter are what assert that one does retry.
+            let stub = StubTransport(["1.1.1.1": route])
+            let client = testClient(stub, retries: testCase.expect.retryable ? 0 : 2)
 
             let failure = await #expect(throws: VPNDetectionError.self) {
                 try await client.lookup("1.1.1.1")
@@ -89,6 +95,7 @@ struct ConformanceTests {
             if let seconds = testCase.expect.retryAfterSeconds {
                 #expect(error.retryAfter == .seconds(seconds), "\(testCase.name): retryAfter")
             }
+            #expect(await stub.callCount == 1, "\(testCase.name): requests")
         }
     }
 

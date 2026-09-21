@@ -148,7 +148,15 @@ func withRetry<T>(_ retries: Int, _ operation: () async throws -> T) async throw
             guard attempt < retries, failure.isRetryable else {
                 throw failure
             }
-            try await Task.sleep(for: failure.retryAfter ?? backoff(attempt))
+            // `Retry-After` is the server's number, and handed to `Task.sleep`
+            // unchecked, one past `maxTimeout` never ends or traps:
+            // `4611686018427387904` slept until the test gave up, and
+            // `9223372036854775807` crashed the caller's process. Too long to
+            // count, it is waited out on the client's own backoff instead; the
+            // 429 is still a throttle, and the error keeps the value the server
+            // sent.
+            let asked = failure.retryAfter.flatMap { $0 <= maxTimeout ? $0 : nil }
+            try await Task.sleep(for: asked ?? backoff(attempt))
             attempt += 1
         }
     }
@@ -156,6 +164,31 @@ func withRetry<T>(_ retries: Int, _ operation: () async throws -> T) async throw
 
 private func backoff(_ attempt: Int) -> Duration {
     .milliseconds(min(5_000, 200 << min(attempt, 5)))
+}
+
+/// The longest bound ``withDeadline(_:_:)`` can be given, and the longest
+/// `Retry-After` ``withRetry(_:_:)`` will wait out.
+///
+/// `Task.sleep(for:)` turns the deadline - now PLUS the bound - into whole
+/// seconds in an `Int64`, and one that does not fit TRAPS inside the concurrency
+/// runtime with `Fatal error: Not enough bits to represent the passed value`,
+/// which no caller and no test can handle. Measured on Swift 6.3, Linux,
+/// 2026-09-20: `.seconds(Int64.max)` and `.seconds(Int64.max - 1)` both crash
+/// the process, while `.seconds(Int64.max / 2)` and `.seconds(8e18)` are slept
+/// on happily, because what has to fit alongside the bound is the monotonic
+/// clock's own reading. Half the range is refused rather than the exact
+/// headroom, which moves as the machine runs; the ~146 billion years left over
+/// are past anything a caller means by a timeout.
+let maxTimeout: Duration = .seconds(Int64.max / 2)
+
+/// Refuses a bound no attempt could meet, before anything is sent.
+func checkTimeout(_ timeout: Duration) throws {
+    guard timeout > .zero, timeout <= maxTimeout else {
+        throw VPNDetectionError(
+            kind: .badRequest,
+            message: "timeout must be positive and at most \(maxTimeout), got \(timeout)",
+        )
+    }
 }
 
 /// Bounds one attempt with a deadline the library owns.
@@ -168,7 +201,11 @@ private func backoff(_ attempt: Int) -> Duration {
 func withDeadline<T: Sendable>(
     _ timeout: Duration, _ operation: @escaping @Sendable () async throws -> T,
 ) async throws -> T {
-    precondition(timeout > .zero, "timeout must be positive")
+    // Refused rather than trapped: this is the one place a per-call value is
+    // seen, and a `precondition` here crashes a caller's process over an
+    // argument it could have been handed back. Same shape as a per-call
+    // `concurrency` below 1 in `lookupBatch`.
+    try checkTimeout(timeout)
     let race = Race<T>()
     let attempt = Task {
         do {

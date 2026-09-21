@@ -34,6 +34,7 @@ public struct VPNDetectionClient: Sendable {
         precondition(options.concurrency > 0, "concurrency must be positive")
         precondition(options.retries >= 0, "retries cannot be negative")
         precondition(options.timeout > .zero, "timeout must be positive")
+        precondition(options.timeout <= maxTimeout, "timeout is longer than the runtime can count")
 
         var middlewares: [any ClientMiddleware] = []
         // An empty key is treated as no key. It is what an unset environment
@@ -49,8 +50,9 @@ public struct VPNDetectionClient: Sendable {
         // through the transport rather than through the generated client and has
         // to reach the same implementation a caller substituted.
         let transport = options.transport ?? DefaultTransport.shared
+        let baseURL = withoutTrailingSlashes(options.baseURL)
         self.api = Client(
-            serverURL: options.baseURL,
+            serverURL: baseURL,
             configuration: Configuration(dateTranscoder: LenientDateTranscoder()),
             transport: transport,
             middlewares: middlewares,
@@ -63,7 +65,7 @@ public struct VPNDetectionClient: Sendable {
             api: api, transport: transport, retries: options.retries, timeout: options.timeout,
         )
         self.oauth = OauthAPI(
-            transport: transport, baseURL: options.baseURL, retries: options.retries,
+            transport: transport, baseURL: baseURL, retries: options.retries,
             timeout: options.timeout,
         )
     }
@@ -197,8 +199,8 @@ public struct VPNDetectionClient: Sendable {
     /// address in it.
     ///
     /// Throws only when cancelled, or when ``BatchOptions/concurrency`` is below
-    /// 1, which is refused as ``VPNDetectionErrorKind/badRequest`` before any
-    /// request.
+    /// 1 or ``BatchOptions/timeout`` is a bound no attempt could meet, each
+    /// refused as ``VPNDetectionErrorKind/badRequest`` before any request.
     public func lookupBatch(
         _ ips: some Sequence<String>, options: BatchOptions = BatchOptions(),
     ) async throws -> BatchResults {
@@ -208,6 +210,12 @@ public struct VPNDetectionClient: Sendable {
             throw VPNDetectionError(
                 kind: .badRequest, message: "concurrency must be at least 1, got \(limit)",
             )
+        }
+        // Refused up front, like the concurrency above: a batch answers bogons and
+        // cache hits without an attempt, so a bound checked only per chunk would be
+        // accepted or refused depending on which addresses it happened to hold.
+        if let timeout = options.timeout {
+            try checkTimeout(timeout)
         }
 
         var keys: [String] = []
@@ -321,6 +329,13 @@ extension VPNDetectionClient {
         /// Your API key. Omit it entirely to use the free tier, which answers
         /// `ip` and `is_vpn` and allows 1000 requests per day per source address.
         public var apiKey: String?
+        /// Where the API is served. Default ``VPNDetectionClient/defaultBaseURL``.
+        ///
+        /// A trailing slash is dropped. Every path this client appends begins with
+        /// one and the transport appends it to whatever path the base URL already
+        /// carries, so `https://api.vpndetection.io/` would ask for `//api/v1/...`.
+        /// That is a different path to the server: production answers it with a
+        /// `301` the default transport refuses to follow, so every call would fail.
         public var baseURL: URL
         /// Set to `nil` to disable caching.
         public var cache: CacheOptions?
@@ -333,6 +348,11 @@ extension VPNDetectionClient {
         /// take longer in total, and a call's own `timeout` replaces it in either
         /// direction. A dataset transfer is bounded only until its response head
         /// arrives, so a download that takes minutes is not cut off.
+        ///
+        /// Must be positive, and short enough for the concurrency runtime to count
+        /// to. Zero, a negative duration and one near the top of `Int64` seconds
+        /// are each a bound no attempt could meet; a call given one refuses it as
+        /// ``VPNDetectionErrorKind/badRequest`` rather than failing on the wire.
         public var timeout: Duration
         /// Override the HTTP implementation. Anything you supply owns its own
         /// redirect policy, and the download endpoint's `302` must not be
@@ -373,7 +393,9 @@ extension VPNDetectionClient {
         /// How long one attempt at one chunk may take, for THIS batch only, in
         /// place of the client's ``VPNDetectionClient/Options/timeout``. A chunk
         /// that runs out of it marks every address in it with a retryable network
-        /// error.
+        /// error. One no attempt could meet is refused as
+        /// ``VPNDetectionErrorKind/badRequest`` before any request, as a
+        /// ``concurrency`` below 1 is.
         public var timeout: Duration?
 
         public init(concurrency: Int? = nil, retries: Int? = nil, timeout: Duration? = nil) {
@@ -382,4 +404,18 @@ extension VPNDetectionClient {
             self.timeout = timeout
         }
     }
+}
+
+// Every path the generated client appends begins with a slash, and the transport
+// appends it to whatever path the base URL already carries, so a base URL ending
+// in one asks for `//api/v1/...`. That is a different path to the server, which
+// answers it with a `301` the default transport refuses to follow, so every call
+// fails. Every trailing slash goes rather than one: dropping a single slash
+// still doubles `.../`.
+private func withoutTrailingSlashes(_ url: URL) -> URL {
+    var text = url.absoluteString
+    while text.hasSuffix("/") {
+        text.removeLast()
+    }
+    return URL(string: text) ?? url
 }

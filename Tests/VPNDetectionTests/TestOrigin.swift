@@ -235,6 +235,19 @@ extension TestOrigin.Answer {
         )
     }
 
+    /// A whole empty dataset listing, served in one piece.
+    static var listing: Self { json(#"{"databases":[]}"#) }
+
+    /// A whole JSON body, served in one piece.
+    static func json(_ text: String) -> Self {
+        let body = Array(text.utf8)
+        return .init(
+            status: .ok,
+            headers: [("Content-Type", "application/json"), ("Content-Length", "\(body.count)")],
+            body: body,
+        )
+    }
+
     /// A small dataset, one byte every 20 ms.
     static func trickled(_ bytes: [UInt8]) -> Self {
         .init(

@@ -34,8 +34,9 @@ public struct OauthAPI: Sendable {
 
     init(transport: any ClientTransport, baseURL: URL, retries: Int, timeout: Duration) {
         self.transport = transport
-        let text = baseURL.absoluteString
-        self.baseURL = text.hasSuffix("/") ? URL(string: String(text.dropLast())) ?? baseURL : baseURL
+        // Without a trailing slash already: the client drops every one before
+        // handing it over, where this used to drop only one.
+        self.baseURL = baseURL
         self.retries = retries
         self.timeout = timeout
     }

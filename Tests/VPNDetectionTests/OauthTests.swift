@@ -303,6 +303,57 @@ struct OauthTests {
         #expect(origin.receivedPaths.count == 1)
     }
 
+    // OauthAPI sends straight to the transport rather than through the generated
+    // client, so it is a second place a doubled slash can come from. Through 4.3.0
+    // it dropped only one.
+    @Test("a trailing slash on the base URL is dropped from OAuth requests", arguments: ["/", "//", "///"])
+    func aTrailingSlashIsDroppedFromOauth(_ suffix: String) async throws {
+        let origin = try await TestOrigin.start { _ in .json(Self.everyRequiredMember.body) }
+        defer { Task { try? await origin.stop() } }
+        let client = VPNDetectionClient(
+            options: .init(
+                baseURL: URL(string: "http://127.0.0.1:\(origin.port)\(suffix)")!, cache: nil, retries: 0,
+            ),
+        )
+
+        _ = try await client.oauth.metadata()
+
+        #expect(origin.receivedPaths == ["/.well-known/oauth-authorization-server"])
+    }
+
+    @Test("every operation refuses an impossible timeout", arguments: Operation.allCases)
+    func everyOperationRefusesAnImpossibleTimeout(_ operation: Operation) async throws {
+        // One reply on offer, so a request that leaked past the check is recorded
+        // and fails the last expectation: a stub with none trips instead of
+        // recording, and `requests` would stay empty whatever happened.
+        let stub = OauthStub([Self.everyRequiredMember])
+        let (oauth, _) = FakeClock.install(on: Self.client(stub).oauth, stub)
+
+        let outcome = await settle(stub) { () async throws -> Void in
+            switch operation {
+            case .metadata:
+                _ = try await oauth.metadata(timeout: .zero)
+            case .deviceAuthorization:
+                _ = try await oauth.deviceAuthorization(clientID: "c", timeout: .zero)
+            case .exchangeDeviceCode:
+                _ = try await oauth.exchangeDeviceCode("d", clientID: "c", timeout: .zero)
+            case .exchangeRefreshToken:
+                _ = try await oauth.exchangeRefreshToken("r", clientID: "c", timeout: .zero)
+            case .revoke:
+                try await oauth.revoke("r", clientID: "c", timeout: .zero)
+            case .pollDeviceToken:
+                _ = try await oauth.pollDeviceToken(Self.device, clientID: "c", timeout: .zero)
+            }
+        }
+
+        guard case .failure(let error as VPNDetectionError)? = outcome else {
+            Issue.record("settled with \(String(describing: outcome)), want a VPNDetectionError")
+            return
+        }
+        #expect(error.kind == .badRequest)
+        #expect(stub.requests.isEmpty)
+    }
+
     @Test("the client's own timeout bounds an OAuth request")
     func clientTimeout() async throws {
         let origin = try await TestOrigin.start { _ in .stalledLookup }

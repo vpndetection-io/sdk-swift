@@ -247,6 +247,68 @@ struct TimeoutTests {
         #expect(ContinuousClock.now - started < .seconds(2), "the cancellation waited for the deadline")
     }
 
+    // A bound no attempt could meet is an argument mistake and is answered as
+    // one. Through 4.3.0 `withDeadline` held a `precondition`, so zero or a
+    // negative crashed the caller's process, and a `Duration` past what
+    // `Task.sleep` counts to crashed it from inside the concurrency runtime.
+    @Test(
+        "a timeout no attempt could meet is refused before any request",
+        arguments: [
+            Duration.zero, .seconds(-1), .milliseconds(-1), .seconds(Int64.max),
+            maxTimeout + .seconds(1),
+        ],
+    )
+    func anImpossibleTimeoutIsRefused(_ timeout: Duration) async throws {
+        let stub = StubTransport.answering("9.9.9.9")
+        let client = VPNDetectionClient(
+            options: .init(apiKey: "key", cache: nil, retries: 2, transport: stub),
+        )
+
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.lookup("9.9.9.9", timeout: timeout)
+        }
+        let error = try #require(failure)
+
+        #expect(error.kind == .badRequest)
+        #expect(error.isRetryable == false)
+        #expect(await stub.callCount == 0, "the request went out before the bound was checked")
+    }
+
+    // A check written into one method is a check the others do not get, and they
+    // reach withDeadline by separate paths.
+    @Test("every call refuses an impossible timeout", arguments: Call.allCases)
+    func everyCallRefusesAnImpossibleTimeout(_ call: Call) async throws {
+        let stub = StubTransport()
+        let client = VPNDetectionClient(options: .init(cache: nil, retries: 0, transport: stub))
+
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            switch call {
+            case .lookup:
+                _ = try await client.lookup("9.9.9.9", timeout: .zero)
+            case .myIP:
+                _ = try await client.myIP(timeout: .zero)
+            case .myEntitlement:
+                _ = try await client.myEntitlement(timeout: .zero)
+            case .batch:
+                _ = try await client.lookupBatch(["9.9.9.9"], options: .init(timeout: .zero))
+            }
+        }
+
+        #expect(try #require(failure).kind == .badRequest)
+        #expect(await stub.callCount == 0)
+    }
+
+    @Test("every database call refuses an impossible timeout", arguments: DatabaseCall.allCases)
+    func everyDatabaseCallRefusesAnImpossibleTimeout(_ call: DatabaseCall) async throws {
+        let stub = StubTransport()
+        let client = VPNDetectionClient(options: .init(cache: nil, retries: 0, transport: stub))
+
+        let failure = try await Self.failure(of: call, on: client, timeout: .zero)
+
+        #expect(failure.kind == .badRequest)
+        #expect(await stub.callCount == 0)
+    }
+
     static func client(
         _ origin: TestOrigin, retries: Int = 0, timeout: Duration = .seconds(30),
     ) -> VPNDetectionClient {

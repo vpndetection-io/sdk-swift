@@ -135,6 +135,30 @@ struct ClientTests {
         #expect(ContinuousClock.now - started >= .seconds(1))
     }
 
+    // `Retry-After` is the server's number, and `Task.sleep` traps on one near the
+    // top of `Int64` seconds: through 4.3.0 `9223372036854775807` crashed the
+    // caller's process, and `4611686018427387904` would have slept for ~146
+    // billion years. Too long to count, it is waited out on the client's own
+    // backoff, and the 429 is still a throttle.
+    @Test(
+        "a Retry-After too long to count is waited out on the backoff", .timeLimit(.minutes(1)),
+        arguments: ["9223372036854775807", "4611686018427387904"],
+    )
+    func aRetryAfterTooLongToCountIsWaitedOutOnTheBackoff(_ header: String) async throws {
+        var route = StubTransport.Route.json(["error": "rate limit exceeded"], status: 429)
+        route.headers = ["Retry-After": header]
+        let stub = StubTransport(["1.1.1.1": route])
+        let client = client(stub, cache: nil, retries: 1)
+
+        let started = ContinuousClock.now
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.lookup("1.1.1.1")
+        }
+        #expect(try #require(failure).kind == .rateLimited)
+        await #expect(stub.callCount == 2)
+        #expect(ContinuousClock.now - started < .seconds(5))
+    }
+
     @Test("cancelling a lookup propagates rather than becoming a network failure")
     func cancellingALookupPropagates() async throws {
         let stub = StubTransport(StubTransport.answers(for: ["9.9.9.1"]), delay: .seconds(5))
@@ -398,6 +422,27 @@ struct ClientTests {
         #expect(VPNDetectionClient.Options().cache?.maxEntries == 10_000)
         #expect(VPNDetectionClient.Options().cache?.ttl == .seconds(3600))
         #expect(VPNDetectionClient.Options().baseURL == VPNDetectionClient.defaultBaseURL)
+    }
+
+    // The transport appends the request path to whatever path the base URL
+    // carries, so a trailing slash asks for `//api/v1/...`. The server answers
+    // that with a `301` the default transport refuses to follow, so every call
+    // fails. Only a real origin shows it: a stub is handed the base URL and the
+    // path separately and never joins them.
+    @Test("a trailing slash on the base URL is dropped", arguments: ["/", "//", "///"])
+    func aTrailingSlashIsDropped(_ suffix: String) async throws {
+        let api = try await TestOrigin.start { _ in .listing }
+        defer { Task { try? await api.stop() } }
+
+        let client = VPNDetectionClient(
+            options: .init(
+                apiKey: "key", baseURL: URL(string: "http://127.0.0.1:\(api.port)\(suffix)")!,
+            ),
+        )
+        let databases = try await client.database.list()
+
+        #expect(databases.isEmpty)
+        #expect(api.receivedPaths == ["/api/v1/database/list"])
     }
 }
 

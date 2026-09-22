@@ -13,7 +13,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "4.3.1"),
+    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "4.3.2"),
 ]
 ```
 

@@ -162,6 +162,45 @@ struct OauthTests {
         #expect(error.status == 200)
     }
 
+    // No corpus case: every response there decodes. One member left out per case,
+    // since a body missing two at once let a defaulting decoder survive elsewhere.
+    @Test(
+        "an answer missing any one required member is the ordinary error",
+        arguments: [
+            ("metadata", "issuer"), ("metadata", "authorization_endpoint"), ("metadata", "token_endpoint"),
+            ("deviceAuthorization", "device_code"), ("deviceAuthorization", "user_code"),
+            ("deviceAuthorization", "verification_uri"), ("deviceAuthorization", "expires_in"),
+            ("deviceAuthorization", "interval"), ("exchangeDeviceCode", "access_token"),
+            ("exchangeDeviceCode", "token_type"), ("exchangeDeviceCode", "expires_in"),
+        ],
+    )
+    func missingARequiredMemberIsTheOrdinaryError(_ operation: String, _ member: String) async throws {
+        let args = JSONValue.object([
+            "clientId": .string("vpndetection-cli"), "deviceCode": .string("mo_dc_x"),
+        ])
+        let whole = OauthStub([Self.everyRequiredMember])
+        let decodes = Self.client(whole, retries: 0).oauth
+        try await succeed(whole) { try await Self.call(decodes, operation, args) }
+
+        var members = try JSONDecoder().decode(
+            [String: JSONValue].self, from: Data(Self.everyRequiredMember.body.utf8),
+        )
+        try #require(members.removeValue(forKey: member) != nil, "\(member) is not in the body")
+        let body = String(decoding: try JSONEncoder().encode(members), as: UTF8.self)
+        let stub = OauthStub([.init(status: 200, body: body)])
+        let oauth = Self.client(stub, retries: 0).oauth
+
+        let outcome = try #require(await settle(stub) { try await Self.call(oauth, operation, args) })
+
+        #expect(stub.requests.count == 1)
+        guard case .failure(let error as VPNDetectionError) = outcome else {
+            Issue.record("settled with \(outcome), want a VPNDetectionError")
+            return
+        }
+        #expect(error.kind == .serverError)
+        #expect(error.status == 200)
+    }
+
     @Test("a failed answer is an OAuth refusal only when it is one")
     func errorsAreClassified() async throws {
         for testCase in Self.oauth["errors"]?["cases"]?.arrayValue ?? [] {
@@ -375,8 +414,10 @@ struct OauthTests {
         #expect(error.kind == .network)
     }
 
-    static func client(_ stub: OauthStub, apiKey: String? = nil) -> VPNDetectionClient {
-        VPNDetectionClient(options: .init(apiKey: apiKey, baseURL: baseURL, cache: nil, transport: stub))
+    static func client(_ stub: OauthStub, apiKey: String? = nil, retries: Int = 2) -> VPNDetectionClient {
+        VPNDetectionClient(
+            options: .init(apiKey: apiKey, baseURL: baseURL, cache: nil, retries: retries, transport: stub),
+        )
     }
 
     static func endpoint(_ endpoint: JSONValue) -> String {

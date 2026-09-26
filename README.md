@@ -1,4 +1,4 @@
-# [<img src="https://s3.vpndetection.io/vpndetection-public/brand/mark.svg" alt="VPNDetection" width="24"/>](https://vpndetection.io/) VPNDetection Swift Client Library
+# [<img src="https://s3.vpndetection.io/vpndetection-public/brand/mark.svg" alt="VPNDetection" height="28"/>](https://vpndetection.io/) VPNDetection Swift Client Library
 
 [![Swift](https://img.shields.io/badge/swift-6.1%2B-F05138.svg)](https://swift.org)
 [![license](https://img.shields.io/github/license/vpndetection-io/sdk-swift)](LICENSE)

@@ -113,10 +113,6 @@ struct OauthTests {
                 let fields = try await succeed(stub) { try await call(oauth) }
 
                 for (member, value) in testCase["expect"]?["present"]?.objectValue ?? [:] {
-                    // The corpus still lists a member the server stopped advertising.
-                    guard member != "client_id_metadata_document_supported" else {
-                        continue
-                    }
                     #expect(names.contains(member), "\(label): no member maps \(member)")
                     #expect(fields[member] == value, "\(label): \(member)")
                 }
@@ -719,7 +715,8 @@ extension OauthMetadata {
         "issuer", "authorization_endpoint", "token_endpoint", "device_authorization_endpoint",
         "revocation_endpoint", "scopes_supported", "response_types_supported", "grant_types_supported",
         "code_challenge_methods_supported", "token_endpoint_auth_methods_supported",
-        "authorization_response_iss_parameter_supported", "service_documentation",
+        "authorization_response_iss_parameter_supported", "client_id_metadata_document_supported",
+        "service_documentation",
     ]
 
     var wireFields: [String: JSONValue] {
@@ -740,6 +737,9 @@ extension OauthMetadata {
         }
         authorizationResponseIssParameterSupported.map {
             fields["authorization_response_iss_parameter_supported"] = .bool($0)
+        }
+        clientIdMetadataDocumentSupported.map {
+            fields["client_id_metadata_document_supported"] = .bool($0)
         }
         serviceDocumentation.map { fields["service_documentation"] = .string($0) }
         return fields

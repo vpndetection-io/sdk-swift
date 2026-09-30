@@ -152,8 +152,10 @@ extension V6Address {
 
         let groups: [Substring]
         if let run = text.firstRange(of: "::") {
-            let head = text[text.startIndex..<run.lowerBound].split(separator: ":")
-            let tail = text[run.upperBound...].split(separator: ":")
+            // Empty groups are kept, so a second run (1::2::3) or a stray colon
+            // (1:::2) fails the group check below rather than being read as one.
+            let head = Self.split(text[text.startIndex..<run.lowerBound])
+            let tail = Self.split(text[run.upperBound...])
             guard head.count + tail.count <= 8 else {
                 return nil
             }
@@ -180,5 +182,9 @@ extension V6Address {
             }
         }
         self.init(high: high, low: low)
+    }
+
+    private static func split(_ groups: Substring) -> [Substring] {
+        groups.isEmpty ? [] : groups.split(separator: ":", omittingEmptySubsequences: false)
     }
 }

@@ -32,7 +32,10 @@ struct BogonTests {
 
     @Test("a malformed address is not a bogon rather than a crash")
     func malformedAddressesAreRejected() {
-        for ip in ["", "notanip", "1.2.3", "1.2.3.4.5", "256.0.0.1", "1.2.3.-1", "::gggg", "1::2::3"] {
+        for ip in [
+            "", "notanip", "1.2.3", "1.2.3.4.5", "256.0.0.1", "1.2.3.-1", "::gggg", "1::2::3",
+            "1:::2", ":1::2", "1::2:",
+        ] {
             #expect(isBogon(ip) == false, "\(ip)")
         }
     }

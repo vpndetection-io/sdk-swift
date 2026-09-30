@@ -99,6 +99,8 @@ public struct VPNDetectionClient: Sendable {
     public func lookup(
         _ ip: String, retries: Int? = nil, timeout: Duration? = nil,
     ) async throws -> LookupResult {
+        // Judged, cached and sent as the IPv4 address it carries, if it is mapped.
+        let ip = unmapped(ip)
         if isBogon(ip) {
             return LookupResult.bogon(ip)
         }
@@ -218,10 +220,18 @@ public struct VPNDetectionClient: Sendable {
             try checkTimeout(timeout)
         }
 
+        // An IPv4-mapped address is sent as the address it carries, once however
+        // many of its spellings were asked, and answered under each one asked.
+        var asked: [String] = []
+        var seenAsked: Set<String> = []
         var keys: [String] = []
         var seen: Set<String> = []
-        for ip in ips where seen.insert(ip).inserted {
-            keys.append(ip)
+        for ip in ips where seenAsked.insert(ip).inserted {
+            asked.append(ip)
+            let carried = unmapped(ip)
+            if seen.insert(carried).inserted {
+                keys.append(carried)
+            }
         }
 
         var outcomes: [String: BatchResults.Outcome] = [:]
@@ -268,7 +278,12 @@ public struct VPNDetectionClient: Sendable {
         // was primed, where nothing ran and the result would otherwise be keys
         // with no outcome behind them.
         try Task.checkCancellation()
-        return BatchResults(keys: keys, outcomes: outcomes)
+        var byAsked: [String: BatchResults.Outcome] = [:]
+        byAsked.reserveCapacity(asked.count)
+        for ip in asked {
+            byAsked[ip] = outcomes[unmapped(ip)]
+        }
+        return BatchResults(keys: asked, outcomes: byAsked)
     }
 
     /// One `POST /batch`, mapped back onto the addresses it was asked about. A

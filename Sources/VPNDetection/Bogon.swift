@@ -6,9 +6,9 @@
 /// itself and they never cost a request. The same check is available as
 /// ``VPNDetectionClient/isBogon(_:)`` on a client you already hold.
 public func isBogon(_ ip: String) -> Bool {
-    // Routed on the colon rather than by trying both tables, so the 4-in-6
-    // forms (::ffff:10.0.0.1) match the v6 ranges exactly as every other
-    // VPNDetection client library resolves them.
+    let ip = unmapped(ip)
+    // Routed on the colon rather than by trying both tables: what still has one
+    // is IPv6, the IPv4-compatible ::a.b.c.d included, which stays inside ::/96.
     if ip.contains(":") {
         guard let address = V6Address(ip) else {
             return false
@@ -19,6 +19,23 @@ public func isBogon(_ ip: String) -> Bool {
         return false
     }
     return bogonRangesV4.contains { $0.contains(address) }
+}
+
+/// The IPv4 address an IPv4-mapped IPv6 address (`::ffff:a.b.c.d`, in any
+/// spelling) carries, and any other string as given.
+///
+/// A server listening on `::` sees every IPv4 visitor in that form, which read
+/// whole is inside `::ffff:0:0/96`, so judging it whole would answer every such
+/// visitor locally as a bogon. `::a.b.c.d` is IPv4-compatible rather than
+/// mapped, and stays IPv6.
+func unmapped(_ ip: String) -> String {
+    guard ip.contains(":"), let address = V6Address(ip), address.high == 0,
+        address.low >> 32 == 0xffff
+    else {
+        return ip
+    }
+    let v4 = UInt32(truncatingIfNeeded: address.low)
+    return "\(v4 >> 24).\((v4 >> 16) & 0xff).\((v4 >> 8) & 0xff).\(v4 & 0xff)"
 }
 
 extension LookupResult {

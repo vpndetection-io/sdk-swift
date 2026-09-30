@@ -44,6 +44,12 @@ final class StubTransport: ClientTransport {
         get async { await state.calls }
     }
 
+    /// Every address a `POST /batch` carried, as sent, in the order the requests
+    /// arrived.
+    var batchIps: [String] {
+        get async { await state.batchIps }
+    }
+
     var peakInFlight: Int {
         get async { await state.peak }
     }
@@ -98,6 +104,7 @@ final class StubTransport: ClientTransport {
         let bytes = try await ArraySlice(collecting: body ?? HTTPBody(), upTo: 1 << 20)
         let decoded = try JSONSerialization.jsonObject(with: Data(bytes)) as? [String: Any]
         let ips = decoded?["ips"] as? [String] ?? []
+        await state.sent(ips)
         var results: [String: Any] = [:]
         var failures: [String: Any] = [:]
         for ip in ips {
@@ -130,8 +137,13 @@ final class StubTransport: ClientTransport {
     private actor State {
         var calls: [String] = []
         var authorizations: [String?] = []
+        var batchIps: [String] = []
         var peak = 0
         private var inFlight = 0
+
+        func sent(_ ips: [String]) {
+            batchIps += ips
+        }
 
         func enter(_ key: String, authorization: String?) {
             calls.append(key)

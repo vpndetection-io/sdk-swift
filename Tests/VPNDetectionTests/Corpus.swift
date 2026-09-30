@@ -10,6 +10,7 @@ import Testing
 /// disagreeing about the same address.
 struct Corpus: Decodable, Sendable {
     let isBogon: [BogonCase]
+    let ipv4Mapped: [MappedCase]
     let bogonResponse: BogonResponse
     let lookup: [LookupCase]
     let errors: [ErrorCase]
@@ -20,6 +21,13 @@ struct Corpus: Decodable, Sendable {
 
     struct BogonCase: Decodable, Sendable {
         let ip: String
+        let expect: Bool
+        let why: String
+    }
+
+    struct MappedCase: Decodable, Sendable {
+        let ip: String
+        let carries: String
         let expect: Bool
         let why: String
     }

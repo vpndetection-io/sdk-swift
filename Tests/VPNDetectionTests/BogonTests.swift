@@ -22,6 +22,8 @@ struct BogonTests {
             ("2001:0:a9ff::1", false),  // first past it
             ("2001:0:c058:6302:ffff:ffff:ffff:ffff", true),  // teredo 192.88.99.2/32, a /64
             ("2001:0:c058:6303::", false),  // first past it
+            ("::ffff:10.0.0.1", true),  // IPv4-mapped: judged as 10.0.0.1
+            ("::ffff:8.8.8.8", false),  // IPv4-mapped: judged as 8.8.8.8
         ],
     )
     func v6PrefixBoundaries(ip: String, expected: Bool) {

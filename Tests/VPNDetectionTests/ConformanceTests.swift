@@ -22,6 +22,39 @@ struct ConformanceTests {
         }
     }
 
+    // A server listening on :: sees every IPv4 visitor as ::ffff:a.b.c.d. Read
+    // whole that is inside ::ffff:0:0/96, so an SDK that did not unmap answered
+    // each one locally as a bogon.
+    @Test("an IPv4-mapped address is the IPv4 address it carries")
+    func ipv4MappedAddressIsTheAddressItCarries() async throws {
+        for testCase in corpus.ipv4Mapped {
+            let label = "\(testCase.ip) (\(testCase.why))"
+            #expect(VPNDetection.isBogon(testCase.ip) == testCase.expect, "\(label): isBogon")
+
+            let stub = StubTransport.answering(testCase.carries)
+            let client = testClient(stub, retries: 0)
+            let result = try await client.lookup(testCase.ip)
+            #expect(result.ip == testCase.carries, "\(label): the answer names the address it carries")
+            #expect(result.isBogon == testCase.expect, "\(label): answered locally exactly when a bogon")
+            if testCase.expect {
+                await #expect(stub.callCount == 0, "\(label): a bogon must not reach the network")
+            } else {
+                await #expect(stub.calls == [testCase.carries], "\(label): sent as \(testCase.carries)")
+                _ = try await client.lookup(testCase.carries)
+                await #expect(stub.callCount == 1, "\(label): \(testCase.carries) is then a cache hit")
+            }
+
+            // The mapped form alone: asked beside its plain form, a batch that sent
+            // the address as given would still have been answered for the plain one.
+            let batchStub = StubTransport.answering(testCase.carries)
+            let results = try await testClient(batchStub, retries: 0).lookupBatch([testCase.ip])
+            #expect(results.keys == [testCase.ip], "\(label): keyed as passed")
+            #expect(try results[testCase.ip]?.get().ip == testCase.carries, "\(label): batch answer")
+            let sent = await batchStub.batchIps
+            #expect(sent == (testCase.expect ? [] : [testCase.carries]), "\(label): the batch body")
+        }
+    }
+
     @Test("a bogon is answered locally in the full max shape")
     func bogonIsAnsweredLocallyInTheFullMaxShape() async throws {
         let stub = StubTransport()

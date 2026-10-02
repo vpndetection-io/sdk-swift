@@ -1,3 +1,5 @@
+import Foundation
+
 /// How the per-client answer cache behaves.
 public struct CacheOptions: Sendable, Hashable {
     /// Maximum number of addresses held. Default 10000.
@@ -30,6 +32,11 @@ actor ResultCache {
     private var entries: [String: Node] = [:]
     private var head: Node?
     private var tail: Node?
+    // The addresses with a request in flight, so a concurrent miss waits for that
+    // request instead of sending its own. Here rather than in a coalescing getter
+    // because a batch must know which addresses it leads BEFORE it builds chunks.
+    private var flights: [String: Flight] = [:]
+    private var tickets: [UUID: Ticket] = [:]
 
     init(_ options: CacheOptions) {
         precondition(options.maxEntries > 0, "cache maxEntries must be positive")
@@ -63,6 +70,85 @@ actor ResultCache {
         if entries.count > maxEntries, let oldest = tail {
             remove(oldest)
         }
+    }
+
+    /// The answer to `ip` if it is fresh, or else whether this caller sends the
+    /// request (``Claim/lead(_:)``, landed with ``land(_:_:_:)``) or waits for the
+    /// one already in flight (``Claim/wait(_:)``, collected with ``collect(_:)``).
+    func claim(_ ip: String) -> Claim {
+        if let hit = get(ip) {
+            return .hit(hit)
+        }
+        if var flight = flights[ip] {
+            let ticket = UUID()
+            tickets[ticket] = Ticket()
+            flight.tickets.append(ticket)
+            flights[ip] = flight
+            return .wait(ticket)
+        }
+        let flight = Flight()
+        flights[ip] = flight
+        return .lead(flight.id)
+    }
+
+    /// ``claim(_:)`` for every address at once, so a batch boards the addresses it
+    /// sends before a lookup arriving meanwhile can start a request of its own.
+    func board(_ ips: [String]) -> [String: Claim] {
+        var claims: [String: Claim] = [:]
+        for ip in ips {
+            claims[ip] = claim(ip)
+        }
+        return claims
+    }
+
+    /// Ends the flight `flight` for `ip`, caching a served answer and handing the
+    /// landing to every waiter. A flight that already landed is left alone, so a
+    /// leader can abandon everything it led without checking what landed.
+    func land(_ ip: String, _ flight: UUID, _ landing: Landing) {
+        guard let current = flights[ip], current.id == flight else {
+            return
+        }
+        flights[ip] = nil
+        if case .served(let result) = landing {
+            set(ip, result)
+        }
+        for id in current.tickets {
+            guard var ticket = tickets[id] else {
+                continue
+            }
+            if let waiter = ticket.waiter {
+                tickets[id] = nil
+                waiter.resume(returning: landing)
+            } else {
+                ticket.landing = landing
+                tickets[id] = ticket
+            }
+        }
+    }
+
+    /// How the flight a ``Claim/wait(_:)`` named ended, or ``Landing/cancelled``
+    /// once the calling task is cancelled, which leaves the flight to its leader.
+    func collect(_ id: UUID) async -> Landing {
+        if let landing = tickets[id]?.landing {
+            tickets[id] = nil
+            return landing
+        }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { (waiter: CheckedContinuation<Landing, Never>) in
+                guard !Task.isCancelled, tickets[id] != nil else {
+                    tickets[id] = nil
+                    waiter.resume(returning: .cancelled)
+                    return
+                }
+                tickets[id]?.waiter = waiter
+            }
+        } onCancel: {
+            Task { await self.drop(id) }
+        }
+    }
+
+    private func drop(_ id: UUID) {
+        tickets.removeValue(forKey: id)?.waiter?.resume(returning: .cancelled)
     }
 
     private func promote(_ node: Node) {
@@ -99,6 +185,32 @@ actor ResultCache {
         }
         node.previous = nil
         node.next = nil
+    }
+
+    /// What ``claim(_:)`` found for one address.
+    enum Claim: Sendable {
+        case hit(LookupResult)
+        case lead(UUID)
+        case wait(UUID)
+    }
+
+    /// How a flight ended. A failure reaches every waiter and is cached for none;
+    /// an abandoned flight, its leader cancelled, sends each waiter to ask again.
+    enum Landing: Sendable {
+        case served(LookupResult)
+        case failed(any Error)
+        case abandoned
+        case cancelled
+    }
+
+    private struct Flight {
+        let id = UUID()
+        var tickets: [UUID] = []
+    }
+
+    private struct Ticket {
+        var landing: Landing?
+        var waiter: CheckedContinuation<Landing, Never>?
     }
 
     // Reference semantics so recency can be reordered without rehashing, and

@@ -2,6 +2,13 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.4.2 - 2026-10-02
+
+### Fixes
+
+- Share one request per address across lookups and batches ([`9687c4d`](https://github.com/vpndetection-io/sdk-swift/commit/9687c4d14eba71c4367bba114cfbf01b51172352))
+- Refuse an impossible per-call timeout before a bogon or cached answer ([`d88be7f`](https://github.com/vpndetection-io/sdk-swift/commit/d88be7fecfe9369b9f6559e72a06fa069fd53efc))
+
 ## 4.4.1 - 2026-09-30
 
 ### Fixes

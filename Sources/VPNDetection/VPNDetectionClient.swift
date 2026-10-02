@@ -99,6 +99,11 @@ public struct VPNDetectionClient: Sendable {
     public func lookup(
         _ ip: String, retries: Int? = nil, timeout: Duration? = nil,
     ) async throws -> LookupResult {
+        // Refused before a bogon or a cached answer, which need no request, or the
+        // bound would be refused only when one went out.
+        if let timeout {
+            try checkTimeout(timeout)
+        }
         // Judged, cached and sent as the IPv4 address it carries, if it is mapped.
         let ip = unmapped(ip)
         if isBogon(ip) {

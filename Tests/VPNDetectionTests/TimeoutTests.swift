@@ -274,6 +274,25 @@ struct TimeoutTests {
         #expect(await stub.callCount == 0, "the request went out before the bound was checked")
     }
 
+    // A bogon and a cached answer need no request, so a bound checked only in
+    // withDeadline let either answer it; through 4.4.1 both did.
+    @Test(
+        "a lookup refuses an impossible timeout before a bogon or a cached answer",
+        arguments: ["10.0.0.1", "9.9.9.9"],
+    )
+    func aLookupRefusesBeforeAnswering(_ ip: String) async throws {
+        let stub = StubTransport.answering("9.9.9.9")
+        let client = VPNDetectionClient(options: .init(apiKey: "key", retries: 0, transport: stub))
+        _ = try await client.lookup("9.9.9.9")
+
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.lookup(ip, timeout: .zero)
+        }
+
+        #expect(try #require(failure).kind == .badRequest)
+        #expect(await stub.callCount == 1)
+    }
+
     // A check written into one method is a check the others do not get, and they
     // reach withDeadline by separate paths.
     @Test("every call refuses an impossible timeout", arguments: Call.allCases)

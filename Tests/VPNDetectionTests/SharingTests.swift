@@ -116,7 +116,10 @@ struct SharingTests {
 
     @Test("a cancelled waiter returns at once and leaves the request to its leader")
     func aCancelledWaiterLeavesItsLeader() async throws {
-        let stub = Self.delayed([Self.address])
+        // The leader lands seconds after the cancel, so a waiter that held on to it is
+        // told apart from a slow runner: at 300 ms the gap was 150 ms against a 100 ms
+        // bound, and a loaded CI runner took 135 ms.
+        let stub = StubTransport(StubTransport.answers(for: [Self.address]), delay: .seconds(2))
         let client = Self.client(stub)
 
         let leader = Task { try await client.lookup(Self.address) }
@@ -127,7 +130,7 @@ struct SharingTests {
         waiter.cancel()
 
         await #expect(throws: CancellationError.self) { try await waiter.value }
-        #expect(ContinuousClock.now - cancelled < .milliseconds(100), "the waiter held on to its leader")
+        #expect(ContinuousClock.now - cancelled < .seconds(1), "the waiter held on to its leader")
         #expect(try await leader.value.ip == Self.address)
         #expect(await stub.callCount == 1)
     }

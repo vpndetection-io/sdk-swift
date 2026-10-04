@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.4.3 - 2026-10-04
+
+### Fixes
+
+- Re-pin the spec to 2026.10.03: metadata needs no license ([`d0a2d7d`](https://github.com/vpndetection-io/sdk-swift/commit/d0a2d7d7e8079f83bdd6da3129bce68c594934fd))
+
 ## 4.4.2 - 2026-10-02
 
 ### Fixes

@@ -2,6 +2,18 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.5.0 - 2026-10-05
+
+### Features
+
+- Add the authorization code sign-in, with PKCE ([`7e2a4ca`](https://github.com/vpndetection-io/sdk-swift/commit/7e2a4ca43ef050de660868aaaccdf77f91012573))
+
+### Fixes
+
+- End the device poll's wait at the code's expiry, and never crash on its interval ([`9991cbb`](https://github.com/vpndetection-io/sdk-swift/commit/9991cbb45472196e4d95fbbdae3a8aeebbedcc67))
+- Refuse an impossible poll timeout before the first wait ([`a67db7e`](https://github.com/vpndetection-io/sdk-swift/commit/a67db7e5054b3955a2ecd320818df20558452098))
+- Wait out a Retry-After past 2^31 - 1 ms on the backoff ([`74d63e9`](https://github.com/vpndetection-io/sdk-swift/commit/74d63e907e83fee488f8523e553a39ca0ae93915))
+
 ## 4.4.3 - 2026-10-04
 
 ### Fixes

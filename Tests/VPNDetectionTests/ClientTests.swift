@@ -138,11 +138,15 @@ struct ClientTests {
     // `Retry-After` is the server's number, and `Task.sleep` traps on one near the
     // top of `Int64` seconds: through 4.3.0 `9223372036854775807` crashed the
     // caller's process, and `4611686018427387904` would have slept for ~146
-    // billion years. Too long to count, it is waited out on the client's own
-    // backoff, and the 429 is still a throttle.
+    // billion years. Through 4.4.3 `2147484` held the call 24.8 days and a
+    // year-9999 date for good. Past 2^31 - 1 ms it is waited out on the client's
+    // own backoff, and the 429 is still a throttle.
     @Test(
-        "a Retry-After too long to count is waited out on the backoff", .timeLimit(.minutes(1)),
-        arguments: ["9223372036854775807", "4611686018427387904"],
+        "a Retry-After past 2^31 - 1 ms is waited out on the backoff", .timeLimit(.minutes(1)),
+        arguments: [
+            "9223372036854775807", "4611686018427387904", "4611686018427387903", "2147484",
+            "Fri, 31 Dec 9999 23:59:59 GMT",
+        ],
     )
     func aRetryAfterTooLongToCountIsWaitedOutOnTheBackoff(_ header: String) async throws {
         var route = StubTransport.Route.json(["error": "rate limit exceeded"], status: 429)

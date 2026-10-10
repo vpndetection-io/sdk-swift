@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.5.1 - 2026-10-10
+
+### Fixes
+
+- Re-pin the spec to 2026.10.09: rotating a key needs apikeys.reveal ([`34f173b`](https://github.com/vpndetection-io/sdk-swift/commit/34f173b035fd11f041425021bf64c18d18dbaad8))
+
 ## 4.5.0 - 2026-10-05
 
 ### Features

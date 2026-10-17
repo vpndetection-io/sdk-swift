@@ -50,7 +50,7 @@ let client = VPNDetectionClient(apiKey: ProcessInfo.processInfo.environment["VPN
 
 let result = try await client.lookup("45.83.91.1")
 print(result.isVpn)             // true
-print(result.vpn?.provider)     // Optional("mullvad")
+print(result.vpn?.provider)     // Optional("nordvpn")
 print(result.isHosting)         // Optional(true)
 print(result.hosting?.provider)
 ```

@@ -821,7 +821,7 @@ extension OauthMetadata {
         "revocation_endpoint", "scopes_supported", "response_types_supported", "grant_types_supported",
         "code_challenge_methods_supported", "token_endpoint_auth_methods_supported",
         "authorization_response_iss_parameter_supported", "client_id_metadata_document_supported",
-        "service_documentation",
+        "registration_endpoint", "service_documentation",
     ]
 
     var wireFields: [String: JSONValue] {
@@ -846,6 +846,7 @@ extension OauthMetadata {
         clientIdMetadataDocumentSupported.map {
             fields["client_id_metadata_document_supported"] = .bool($0)
         }
+        registrationEndpoint.map { fields["registration_endpoint"] = .string($0) }
         serviceDocumentation.map { fields["service_documentation"] = .string($0) }
         return fields
     }

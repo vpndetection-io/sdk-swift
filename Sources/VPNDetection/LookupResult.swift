@@ -23,6 +23,9 @@ public struct LookupResult: Sendable, Hashable {
     public let isResproxy: Bool?
     public let isDcproxy: Bool?
     public let isMobproxy: Bool?
+    /// Whether a public proxy, one anyone can connect through, listens on the
+    /// address or sends its traffic out from it. Scale and above.
+    public let isPubproxy: Bool?
 
     public let vpn: VpnDetail?
     public let hosting: ClassDetail?
@@ -32,6 +35,8 @@ public struct LookupResult: Sendable, Hashable {
     public let resproxy: ProxyDetail?
     public let dcproxy: ProxyDetail?
     public let mobproxy: ProxyDetail?
+    /// Detail for `isPubproxy`. Empty when it is false. Max only.
+    public let pubproxy: PubproxyDetail?
 }
 
 /// What is known about the VPN attribution.
@@ -91,6 +96,30 @@ public struct ProxyDetail: Sendable, Hashable {
     }
 }
 
+/// The address in Public Proxy IP, open proxies anyone can connect through, over
+/// a rolling 90 day window. It covers both ends of a proxy: the address it
+/// listens on and the address its traffic leaves from.
+public struct PubproxyDetail: Sendable, Hashable {
+    /// Whether a public proxy listens on this address.
+    public let entry: Bool?
+    /// Whether a public proxy's traffic leaves from this address.
+    public let exit: Bool?
+    /// The protocols of the proxies listening on or leaving from this address:
+    /// `http`, `https` (an HTTP proxy that also tunnels HTTPS), `socks4` or
+    /// `socks5`. Empty where only the address is known.
+    public let protocols: [String]?
+    /// The most recent date within the window a proxy on this address was seen,
+    /// as `YYYY-MM-DD`.
+    public let lastSeen: String?
+    /// The most recent date within the window a request through a proxy on this
+    /// address was answered, as `YYYY-MM-DD`, or an empty string when none was.
+    public let lastUsable: String?
+
+    public var isEmpty: Bool {
+        entry == nil && exit == nil && protocols == nil && lastSeen == nil && lastUsable == nil
+    }
+}
+
 // The one place a wire payload becomes the public shape. Absent-versus-false
 // survives for free: every tier-gated member is already an Optional, so copying
 // it across cannot collapse `false` into "not in your plan".
@@ -106,6 +135,7 @@ extension LookupResult {
         self.isResproxy = body.isResproxy
         self.isDcproxy = body.isDcproxy
         self.isMobproxy = body.isMobproxy
+        self.isPubproxy = body.isPubproxy
         self.vpn = body.vpn.map { VpnDetail($0.value1) }
         self.hosting = body.hosting.map { ClassDetail($0.value1) }
         self.relay = body.relay.map { ClassDetail($0.value1) }
@@ -114,6 +144,7 @@ extension LookupResult {
         self.resproxy = body.resproxy.map { ProxyDetail($0.value1) }
         self.dcproxy = body.dcproxy.map { ProxyDetail($0.value1) }
         self.mobproxy = body.mobproxy.map { ProxyDetail($0.value1) }
+        self.pubproxy = body.pubproxy.map { PubproxyDetail($0.value1) }
     }
 }
 
@@ -142,5 +173,15 @@ extension ProxyDetail {
         self.hits = detail.hits
         self.hitsDaysPct = detail.hitsDaysPct
         self.providersNum = detail.providersNum
+    }
+}
+
+extension PubproxyDetail {
+    init(_ detail: Components.Schemas.PubproxyDetail) {
+        self.entry = detail.entry
+        self.exit = detail.exit
+        self.protocols = detail.protocols
+        self.lastSeen = detail.lastSeen
+        self.lastUsable = detail.lastUsable
     }
 }

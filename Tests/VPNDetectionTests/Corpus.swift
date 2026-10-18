@@ -52,6 +52,7 @@ struct Corpus: Decodable, Sendable {
             let vpn: [String: JSONValue]?
             let hosting: [String: JSONValue]?
             let dcproxy: [String: JSONValue]?
+            let pubproxy: [String: JSONValue]?
         }
     }
 
@@ -162,6 +163,7 @@ enum Wire {
         "is_resproxy": { $0.isResproxy },
         "is_dcproxy": { $0.isDcproxy },
         "is_mobproxy": { $0.isMobproxy },
+        "is_pubproxy": { $0.isPubproxy },
     ]
 
     static let details: [String: @Sendable (LookupResult) -> [String: JSONValue]?] = [
@@ -173,6 +175,7 @@ enum Wire {
         "resproxy": { $0.resproxy?.wireFields },
         "dcproxy": { $0.dcproxy?.wireFields },
         "mobproxy": { $0.mobproxy?.wireFields },
+        "pubproxy": { $0.pubproxy?.wireFields },
     ]
 
     static func isKnownKey(_ wire: String) -> Bool {
@@ -210,6 +213,18 @@ extension ProxyDetail {
         hits.map { fields["hits"] = .int($0) }
         hitsDaysPct.map { fields["hits_days_pct"] = .int($0) }
         providersNum.map { fields["providers_num"] = .int($0) }
+        return fields
+    }
+}
+
+extension PubproxyDetail {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [:]
+        entry.map { fields["entry"] = .bool($0) }
+        exit.map { fields["exit"] = .bool($0) }
+        protocols.map { fields["protocols"] = .array($0.map { .string($0) }) }
+        lastSeen.map { fields["last_seen"] = .string($0) }
+        lastUsable.map { fields["last_usable"] = .string($0) }
         return fields
     }
 }

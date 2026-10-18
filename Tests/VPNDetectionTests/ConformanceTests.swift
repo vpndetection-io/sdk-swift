@@ -95,6 +95,7 @@ struct ConformanceTests {
             testCase.expect.vpn.map { expectDetail(result, "vpn", is: $0, testCase.name) }
             testCase.expect.hosting.map { expectDetail(result, "hosting", is: $0, testCase.name) }
             testCase.expect.dcproxy.map { expectDetail(result, "dcproxy", is: $0, testCase.name) }
+            testCase.expect.pubproxy.map { expectDetail(result, "pubproxy", is: $0, testCase.name) }
         }
     }
 

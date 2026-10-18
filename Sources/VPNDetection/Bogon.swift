@@ -52,12 +52,15 @@ extension LookupResult {
             provider: nil, firstSeen: nil, lastSeen: nil,
             hits: nil, hitsDaysPct: nil, providersNum: nil,
         )
+        let pubproxy = PubproxyDetail(
+            entry: nil, exit: nil, protocols: nil, lastSeen: nil, lastUsable: nil,
+        )
         return LookupResult(
             ip: ip, isVpn: false, isBogon: true,
             isHosting: false, isRelay: false, isTor: false, isCdn: false,
-            isResproxy: false, isDcproxy: false, isMobproxy: false,
+            isResproxy: false, isDcproxy: false, isMobproxy: false, isPubproxy: false,
             vpn: vpn, hosting: classDetail, relay: classDetail, tor: classDetail,
-            cdn: classDetail, resproxy: proxy, dcproxy: proxy, mobproxy: proxy,
+            cdn: classDetail, resproxy: proxy, dcproxy: proxy, mobproxy: proxy, pubproxy: pubproxy,
         )
     }
 }

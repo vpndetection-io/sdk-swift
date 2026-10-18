@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.7.0 - 2026-10-18
+
+### Features
+
+- Re-pin the spec to 2026.10.18: isPubproxy and the pubproxy detail ([`8f99fb7`](https://github.com/vpndetection-io/sdk-swift/commit/8f99fb7cc5750efe6e0a3ea2081e17df7fa88ea3))
+
 ## 4.6.0 - 2026-10-17
 
 ### Features

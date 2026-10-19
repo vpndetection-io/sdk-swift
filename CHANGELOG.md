@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.8.0 - 2026-10-19
+
+### Features
+
+- Re-pin the spec to 2026.10.19: num_ports and num_proxies in the pubproxy detail ([`0a428df`](https://github.com/vpndetection-io/sdk-swift/commit/0a428df6d93892d912b80bda320fb2b2e01bc3a7))
+
 ## 4.7.0 - 2026-10-18
 
 ### Features

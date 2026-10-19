@@ -41,7 +41,9 @@ public struct VPNDetectionClient: Sendable {
         // variable or CI secret interpolates to, and `Bearer ` with nothing
         // behind it is never what anyone meant - the API would refuse it as
         // unauthorized rather than serve the anonymous tier that was intended.
-        if let apiKey = options.apiKey, !apiKey.isEmpty {
+        // Trimmed, so a key read from a file loses its newline, and blanks alone
+        // are no key.
+        if let apiKey = options.apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !apiKey.isEmpty {
             middlewares.append(AuthMiddleware(apiKey: apiKey))
         }
         middlewares.append(ErrorMiddleware())

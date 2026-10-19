@@ -2,6 +2,13 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.8.1 - 2026-10-19
+
+### Fixes
+
+- Trim the API key, and refuse one holding a control character ([`2755365`](https://github.com/vpndetection-io/sdk-swift/commit/275536558714f6d9c5f96bec9093fcfd548e5895))
+- Read Retry-After strictly, and an unreadable 2xx as a retried server error ([`86eec82`](https://github.com/vpndetection-io/sdk-swift/commit/86eec82f9d632938960a344130cae1a43e3b1410))
+
 ## 4.8.0 - 2026-10-19
 
 ### Features

@@ -220,6 +220,105 @@ struct ClientTests {
         await #expect(stub.authorizations == [nil])
     }
 
+    // A key of blanks alone is no key, and the blanks around a key, a file's
+    // newline among them, are no part of it. Through 4.8.0 "   " went out as
+    // `Authorization: Bearer` and the blanks.
+    @Test("a blank key sends no authorization, and a key is sent trimmed")
+    func blankKeySendsNoAuthorization() async throws {
+        for apiKey in ["   ", "\t", " \r\n "] {
+            let stub = StubTransport.answering("1.1.1.1")
+            _ = try await client(stub, apiKey: apiKey).lookup("1.1.1.1")
+            await #expect(stub.authorizations == [nil], "apiKey \(apiKey.debugDescription)")
+        }
+        let stub = StubTransport.answering("1.1.1.1")
+        _ = try await client(stub, apiKey: " sk-test\r\n").lookup("1.1.1.1")
+        await #expect(stub.authorizations == ["Bearer sk-test"])
+    }
+
+    // HTTPTypes turned a control character into a space, so `k\u{01}ey` went out
+    // as `Bearer k ey`, another key altogether.
+    @Test("a key holding a control character is refused before anything is sent")
+    func controlCharacterKeyIsRefused() async throws {
+        for apiKey in ["sk\u{01}test", "sk-test\u{7F}", "sk\ttest", "sk-test\r\nX-Injected: 1"] {
+            let stub = StubTransport.answering("1.1.1.1")
+            let failure = await #expect(throws: VPNDetectionError.self) {
+                try await client(stub, apiKey: apiKey, cache: nil).lookup("1.1.1.1")
+            }
+            #expect(try #require(failure).kind == .badRequest, "apiKey \(apiKey.debugDescription)")
+            await #expect(stub.callCount == 0, "apiKey \(apiKey.debugDescription)")
+        }
+    }
+
+    // A proxy's page, a cut-off or empty body, or an answer without the member
+    // it requires is the server's fault: through 4.8.0 it came back `network`
+    // with no status.
+    @Test("a 2xx a call cannot read is a retried server error carrying its status")
+    func unreadableAnswerIsRetriedServerError() async throws {
+        let calls: [(String, String, @Sendable (VPNDetectionClient) async throws -> Void)] = [
+            ("1.1.1.1", "{\"ip\":", { _ = try await $0.lookup("1.1.1.1") }),
+            ("/api/v1/database/list", "{\"databases\":", { _ = try await $0.database.list() }),
+        ]
+        for (route, cutOff, call) in calls {
+            for body in ["<html>gateway</html>", cutOff, "", "null", "[]", "{}"] {
+                let stub = StubTransport([route: .init(body: Data(body.utf8))])
+                let failure = await #expect(throws: VPNDetectionError.self) {
+                    try await call(client(stub, apiKey: "key", cache: nil, retries: 2))
+                }
+                #expect(try #require(failure).kind == .serverError, "\(route) \(body.debugDescription)")
+                #expect(try #require(failure).status == 200, "\(route) \(body.debugDescription)")
+                await #expect(stub.callCount == 3, "\(route) \(body.debugDescription)")
+            }
+        }
+    }
+
+    // Through 4.8.0 an empty `error` hid the `rc` beside it, and an empty `rc`
+    // alone was the message.
+    @Test("an empty message in the envelope gives way to the other member, then the status")
+    func emptyEnvelopeMessageGivesWay() async throws {
+        let cases: [([String: Any], String)] = [
+            (["error": "", "rc": "QUOTA_EXCEEDED"], "QUOTA_EXCEEDED"),
+            (["rc": ""], "request failed with status 403"),
+            (["error": ""], "request failed with status 403"),
+        ]
+        for (envelope, message) in cases {
+            let stub = StubTransport(["/api/v1/database/list": .json(envelope, status: 403)])
+            let failure = await #expect(throws: VPNDetectionError.self) {
+                try await client(stub, apiKey: "key").database.list()
+            }
+            #expect(try #require(failure).message == message, "\(envelope)")
+        }
+    }
+
+    // Digits, or one of RFC 9110's three date forms in GMT. Through 4.8.0 `Int`
+    // took a sign, and `DateFormatter` read one form only, in any zone it could
+    // name.
+    @Test("a Retry-After is digits or an HTTP date in GMT, and nothing else")
+    func retryAfterIsDigitsOrAnHttpDate() throws {
+        let at = Date().addingTimeInterval(60)
+        func format(_ pattern: String) -> String {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "GMT")
+            formatter.dateFormat = pattern
+            return formatter.string(from: at)
+        }
+        let imf = format("EEE, dd MMM yyyy HH:mm:ss")
+        for value in ["0", "120", " 7 ", "\(imf) GMT", format("EEEE, dd-MMM-yy HH:mm:ss 'GMT'"),
+                      format("EEE MMM d HH:mm:ss yyyy").replacingOccurrences(of: #"^(\w{3} \w{3}) (\d) "#,
+                                                                              with: "$1  $2 ", options: .regularExpression)] {
+            #expect(parseRetryAfter(value) != nil, "\(value.debugDescription) is a wait")
+        }
+        let next = Calendar(identifier: .gregorian).component(.year, from: at) + 1
+        for value in ["\(imf) +0000", "\(imf) +0500", "\(imf) PST", "\(imf) gmt", "Xyz, 01 Jan \(next) 08:49:37 GMT",
+                      "Tue, 31 Nov \(next) 08:49:37 GMT", "Fri, 01 Jan \(next) 25:00:00 GMT", "2026-10-11T06:00:00Z",
+                      "1.5", "+1", "-1", "0x10", "1_0", "1e3", "tomorrow", ""] {
+            #expect(parseRetryAfter(value) == nil, "\(value.debugDescription) is no wait")
+        }
+        let wait = try #require(parseRetryAfter("\(imf) GMT"))
+        #expect(wait >= .seconds(55) && wait <= .seconds(61))
+        #expect(parseRetryAfter("Sun, 06 Nov 1994 08:49:37 GMT") == .zero)
+    }
+
     @Test("caching can be turned off")
     func cachingCanBeTurnedOff() async throws {
         let stub = StubTransport.answering("1.1.1.1")

@@ -53,7 +53,8 @@ extension LookupResult {
             hits: nil, hitsDaysPct: nil, providersNum: nil,
         )
         let pubproxy = PubproxyDetail(
-            entry: nil, exit: nil, protocols: nil, lastSeen: nil, lastUsable: nil,
+            entry: nil, exit: nil, protocols: nil, numPorts: nil, numProxies: nil, lastSeen: nil,
+            lastUsable: nil,
         )
         return LookupResult(
             ip: ip, isVpn: false, isBogon: true,

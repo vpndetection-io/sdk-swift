@@ -108,6 +108,12 @@ public struct PubproxyDetail: Sendable, Hashable {
     /// `http`, `https` (an HTTP proxy that also tunnels HTTPS), `socks4` or
     /// `socks5`. Empty where only the address is known.
     public let protocols: [String]?
+    /// How many distinct ports a public proxy listens on at this address; 0 when
+    /// it is only an exit, or its port is not known.
+    public let numPorts: Int?
+    /// How many distinct public proxies' traffic left from this address; 0 when
+    /// it is only an entry.
+    public let numProxies: Int?
     /// The most recent date within the window a proxy on this address was seen,
     /// as `YYYY-MM-DD`.
     public let lastSeen: String?
@@ -116,7 +122,8 @@ public struct PubproxyDetail: Sendable, Hashable {
     public let lastUsable: String?
 
     public var isEmpty: Bool {
-        entry == nil && exit == nil && protocols == nil && lastSeen == nil && lastUsable == nil
+        entry == nil && exit == nil && protocols == nil && numPorts == nil && numProxies == nil
+            && lastSeen == nil && lastUsable == nil
     }
 }
 
@@ -181,6 +188,8 @@ extension PubproxyDetail {
         self.entry = detail.entry
         self.exit = detail.exit
         self.protocols = detail.protocols
+        self.numPorts = detail.numPorts
+        self.numProxies = detail.numProxies
         self.lastSeen = detail.lastSeen
         self.lastUsable = detail.lastUsable
     }

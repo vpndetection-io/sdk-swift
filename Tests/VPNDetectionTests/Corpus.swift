@@ -223,6 +223,8 @@ extension PubproxyDetail {
         entry.map { fields["entry"] = .bool($0) }
         exit.map { fields["exit"] = .bool($0) }
         protocols.map { fields["protocols"] = .array($0.map { .string($0) }) }
+        numPorts.map { fields["num_ports"] = .int($0) }
+        numProxies.map { fields["num_proxies"] = .int($0) }
         lastSeen.map { fields["last_seen"] = .string($0) }
         lastUsable.map { fields["last_usable"] = .string($0) }
         return fields

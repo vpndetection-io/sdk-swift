@@ -305,6 +305,10 @@ public struct Database: Sendable, Hashable {
     /// False when the license has lapsed; downloads are refused.
     public let inTerm: Bool
     public let standing: Standing
+    /// An Open database: free under CC BY-SA 4.0, so credit VPNDetection and
+    /// share what you build from it under the same license. Every organization
+    /// holds a `standard` license to it from the start.
+    public let open: Bool
     /// Every published version of this family.
     public let versions: [DatabaseVersion]
 
@@ -376,6 +380,8 @@ public struct Download: Sendable, Hashable {
     public let format: String
     public let outcome: Outcome
     public let bytes: Int64?
+    /// Whether the dataset is an Open one, free under CC BY-SA 4.0.
+    public let open: Bool
     public let created: Date
 
     public enum Outcome: String, Sendable, Hashable, CaseIterable {
@@ -428,6 +434,7 @@ extension Database {
         self.noticeDueAt = wire.noticeDueAt
         self.inTerm = wire.inTerm
         self.standing = Standing(wire.standing)
+        self.open = wire.open
         self.versions = wire.versions.map(DatabaseVersion.init)
     }
 }
@@ -515,6 +522,7 @@ extension Download {
         self.format = wire.format
         self.outcome = Outcome(rawValue: wire.outcome.rawValue) ?? .unknown
         self.bytes = wire.bytes
+        self.open = wire.open
         self.created = wire.created
     }
 }

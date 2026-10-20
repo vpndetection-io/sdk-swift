@@ -450,6 +450,7 @@ struct ClientTests {
                     "notice_due_at": nil,
                     "in_term": true,
                     "standing": "licensed",
+                    "open": false,
                     "versions": [[
                         "id": "vpn_ip_extended_v1",
                         "version": 1,
@@ -469,6 +470,7 @@ struct ClientTests {
         #expect(databases[0].licenseType == .standard)
         #expect(databases[0].standing == .licensed)
         #expect(databases[0].inTerm)
+        #expect(databases[0].open == false)
         let version = try #require(databases[0].versions.first)
         #expect(version.id == "vpn_ip_extended_v1")
         #expect(version.version == 1)
@@ -767,6 +769,7 @@ extension ClientTests {
             "license_type": "standard",
             "in_term": true,
             "standing": "licensed",
+            "open": false,
             "starts": starts,
             "versions": [["id": "\(base)_v1", "version": 1, "formats": []]],
         ]

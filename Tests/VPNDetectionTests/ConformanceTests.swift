@@ -55,8 +55,8 @@ struct ConformanceTests {
         }
     }
 
-    @Test("a bogon is answered locally in the full max shape")
-    func bogonIsAnsweredLocallyInTheFullMaxShape() async throws {
+    @Test("a bogon is answered locally in the widest shape")
+    func bogonIsAnsweredLocallyInTheWidestShape() async throws {
         let stub = StubTransport()
         let client = testClient(stub)
 
@@ -70,6 +70,8 @@ struct ConformanceTests {
         for name in corpus.bogonResponse.emptyObjects {
             expectDetail(result, name, is: [:])
         }
+        expectDetail(result, "location", is: corpus.bogonResponse.location)
+        expectDetail(result, "asn", is: corpus.bogonResponse.asn)
         await #expect(stub.callCount == 0, "a bogon must not reach the network")
     }
 
@@ -96,6 +98,8 @@ struct ConformanceTests {
             testCase.expect.hosting.map { expectDetail(result, "hosting", is: $0, testCase.name) }
             testCase.expect.dcproxy.map { expectDetail(result, "dcproxy", is: $0, testCase.name) }
             testCase.expect.pubproxy.map { expectDetail(result, "pubproxy", is: $0, testCase.name) }
+            testCase.expect.location.map { expectDetail(result, "location", is: $0, testCase.name) }
+            testCase.expect.asn.map { expectDetail(result, "asn", is: $0, testCase.name) }
         }
     }
 

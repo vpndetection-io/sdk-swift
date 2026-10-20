@@ -40,7 +40,8 @@ func unmapped(_ ip: String) -> String {
 
 extension LookupResult {
     /// The answer a bogon gets, in the full shape the API serves at its widest
-    /// plan: every flag present and false, every detail object present and empty.
+    /// plan: every flag present and false, every detail object present and empty,
+    /// and a location and AS of empty strings and AS 0.
     ///
     /// `isBogon` is set so a caller can always tell a locally computed answer
     /// from a served one. Note this is deliberately the WIDEST shape regardless
@@ -62,6 +63,7 @@ extension LookupResult {
             isResproxy: false, isDcproxy: false, isMobproxy: false, isPubproxy: false,
             vpn: vpn, hosting: classDetail, relay: classDetail, tor: classDetail,
             cdn: classDetail, resproxy: proxy, dcproxy: proxy, mobproxy: proxy, pubproxy: pubproxy,
+            location: .empty, asn: .empty,
         )
     }
 }

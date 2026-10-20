@@ -35,6 +35,8 @@ struct Corpus: Decodable, Sendable {
     struct BogonResponse: Decodable, Sendable {
         let flagsFalse: [String]
         let emptyObjects: [String]
+        let location: [String: JSONValue]
+        let asn: [String: JSONValue]
     }
 
     struct LookupCase: Decodable, Sendable {
@@ -53,6 +55,8 @@ struct Corpus: Decodable, Sendable {
             let hosting: [String: JSONValue]?
             let dcproxy: [String: JSONValue]?
             let pubproxy: [String: JSONValue]?
+            let location: [String: JSONValue]?
+            let asn: [String: JSONValue]?
         }
     }
 
@@ -176,6 +180,8 @@ enum Wire {
         "dcproxy": { $0.dcproxy?.wireFields },
         "mobproxy": { $0.mobproxy?.wireFields },
         "pubproxy": { $0.pubproxy?.wireFields },
+        "location": { $0.location?.wireFields },
+        "asn": { $0.asn?.wireFields },
     ]
 
     static func isKnownKey(_ wire: String) -> Bool {
@@ -228,5 +234,26 @@ extension PubproxyDetail {
         lastSeen.map { fields["last_seen"] = .string($0) }
         lastUsable.map { fields["last_usable"] = .string($0) }
         return fields
+    }
+}
+
+extension Location {
+    var wireFields: [String: JSONValue] {
+        [
+            "continent": .string(continent), "continent_name": .string(continentName),
+            "country": .string(country), "country_name": .string(countryName),
+            "timezone": .string(timezone), "currency_code": .string(currencyCode),
+            "currency_name": .string(currencyName), "currency_symbol": .string(currencySymbol),
+            "flag_emoji": .string(flagEmoji), "flag_unicode": .string(flagUnicode),
+        ]
+    }
+}
+
+extension Asn {
+    var wireFields: [String: JSONValue] {
+        [
+            "asn": .int(asn), "name": .string(name), "domain": .string(domain),
+            "type": .string(type), "prefix": .string(prefix),
+        ]
     }
 }

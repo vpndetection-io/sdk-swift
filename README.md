@@ -30,7 +30,7 @@ Requires Swift 6.1 or newer, and macOS 13, iOS 16, tvOS 16, watchOS 9 or visionO
 
 ## Usage
 
-**No API key needed to start.** The free tier answers `ip` and `is_vpn`, and allows 1000 requests per day per source address.
+**No API key needed to start.** Without a key, a lookup answers `ip` and `is_vpn`, up to 1000 a day per source address.
 
 ```swift
 import VPNDetection
@@ -43,16 +43,17 @@ print(result.isVpn)   // true
 
 ### With an API key
 
-An API key raises your quota, and raises your features on a paid plan. Create one in the [console](https://app.vpndetection.io), then pass it in:
+A free key adds Tor and relay detection, where the address is and the AS that announces it. Every paid plan answers every field, the same on each, and the plans differ only in how many lookups they include. Create a key in the [console](https://app.vpndetection.io), then pass it in:
 
 ```swift
 let client = VPNDetectionClient(apiKey: ProcessInfo.processInfo.environment["VPNDETECTION_API_KEY"]!)
 
 let result = try await client.lookup("45.83.91.1")
-print(result.isVpn)             // true
-print(result.vpn?.provider)     // Optional("nordvpn")
-print(result.isHosting)         // Optional(true)
-print(result.hosting?.provider)
+print(result.isVpn)                 // true
+print(result.location?.country)     // the ISO 3166 country code
+print(result.asn?.name)             // who runs the announcing network
+print(result.vpn?.provider)         // Optional("nordvpn"), on a paid plan
+print(result.isHosting)             // Optional(true), on a paid plan
 ```
 
 Every setting has a default, and `VPNDetectionClient.Options` is where you change one:
@@ -250,7 +251,7 @@ Check that `state` came back as you sent it before you exchange `code`, which wo
 
 ### Absent is not false
 
-Only `ip` and `isVpn` come back on every plan. The rest are `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
+Without a key only `ip` and `isVpn` come back, and a free key adds Tor, relay, `location` and `asn`. The rest are `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
 
 ```swift
 result.isHosting ?? false   // when you only want the flag

@@ -463,11 +463,12 @@ public struct VPNDetectionClient: Sendable {
 }
 
 extension VPNDetectionClient {
-    /// How a client behaves. Everything has a default; an empty `Options` is the
-    /// free tier against production.
+    /// How a client behaves. Everything has a default; an empty `Options` is no
+    /// API key against production.
     public struct Options: Sendable {
-        /// Your API key. Omit it entirely to use the free tier, which answers
-        /// `ip` and `is_vpn` and allows 1000 requests per day per source address.
+        /// Your API key. Without one a lookup answers `ip` and `is_vpn`, up to
+        /// 1000 a day per source address; a free key adds Tor, relay, `location`
+        /// and `asn`, and every paid plan answers every field.
         public var apiKey: String?
         /// Where the API is served. Default ``VPNDetectionClient/defaultBaseURL``.
         ///

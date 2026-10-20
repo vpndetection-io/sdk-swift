@@ -28,13 +28,13 @@ enum Tier: String, CaseIterable, Sendable {
     }
 
     /// What this rung promises against whichever observable rung sits below it.
-    /// The first paid tier serves strictly more than a free key; every paid
-    /// plan answers the same fields, so a higher paid tier only keeps what the
-    /// one under it serves, and a free key keeps what no key does.
+    /// A free key serves strictly more than no key, and the first paid tier
+    /// strictly more than a free key; every paid plan answers the same fields,
+    /// so a higher paid tier only keeps what the one under it serves.
     var widens: Bool {
         switch self {
-        case .unauth, .free, .scale, .max: false
-        case .starter: true
+        case .unauth, .scale, .max: false
+        case .free, .starter: true
         }
     }
 

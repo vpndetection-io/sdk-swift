@@ -2,6 +2,13 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.9.0 - 2026-10-20
+
+### Features
+
+- Re-pin the spec to 2026.10.20: open on databases and downloads ([`fc6f259`](https://github.com/vpndetection-io/sdk-swift/commit/fc6f25908408438ac4c53d70f7b3c638e9705c50))
+- Add location and asn to lookup results, a bogon's included ([`07eb748`](https://github.com/vpndetection-io/sdk-swift/commit/07eb7484f16f100364c8de12fdda9478ba562c11))
+
 ## 4.8.1 - 2026-10-19
 
 ### Fixes

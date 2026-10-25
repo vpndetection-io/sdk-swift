@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.10.0 - 2026-10-25
+
+### Features
+
+- Add oauth.register, for RFC 7591 dynamic client registration ([`5239c61`](https://github.com/vpndetection-io/sdk-swift/commit/5239c6164cd1082c4fd6a6cbc100e0837eecb35c))
+
 ## 4.9.0 - 2026-10-20
 
 ### Features

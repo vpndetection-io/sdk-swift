@@ -249,6 +249,18 @@ let token = try await client.oauth.exchangeAuthorizationCode(
 
 Check that `state` came back as you sent it before you exchange `code`, which works once. The client ID can also be the https URL of a client metadata document your app serves, and such an app is never handed a key, so `token.apikey` stays `nil`.
 
+### Register a client
+
+An app with no client ID, and no client metadata document to use as one, registers itself, then signs in with the `clientID` it gets back as the client ID for `authorizationURL` and `exchangeAuthorizationCode`:
+
+```swift
+let client = VPNDetectionClient()
+let registration = try await client.oauth.register(
+    redirectURIs: ["http://127.0.0.1:8765/callback"], clientName: "Your App")
+```
+
+Each redirect URI must be https on a public host name, or http on a loopback address, which then matches any port. Nothing is kept until a person approves the client, so an app with no client ID saved can simply register again.
+
 ### Absent is not false
 
 Without a key only `ip` and `isVpn` come back, and a free key adds Tor, relay, `location` and `asn`. The rest are `Optional`, where `nil` means "not in your plan" rather than "checked, and no".

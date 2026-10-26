@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.10.1 - 2026-10-26
+
+### Fixes
+
+- Re-pin the spec to 2026.10.25: Retry-After on myip's 429 ([`30bcac4`](https://github.com/vpndetection-io/sdk-swift/commit/30bcac4d4f86c583617a5471529cc7e17023e689))
+
 ## 4.10.0 - 2026-10-25
 
 ### Features

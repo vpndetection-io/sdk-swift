@@ -55,7 +55,7 @@ public struct VPNDetectionClient: Sendable {
         let baseURL = withoutTrailingSlashes(options.baseURL)
         self.api = Client(
             serverURL: baseURL,
-            configuration: Configuration(dateTranscoder: LenientDateTranscoder()),
+            configuration: Configuration(dateTranscoder: RFC3339DateTranscoder()),
             transport: transport,
             middlewares: middlewares,
         )
@@ -154,7 +154,7 @@ public struct VPNDetectionClient: Sendable {
                         kind: .serverError, message: "unexpected response: \(output)",
                     )
                 }
-                return LookupResult(try ok.body.json)
+                return try LookupResult(ok.body.json)
             }
         }
     }
@@ -187,7 +187,7 @@ public struct VPNDetectionClient: Sendable {
                         kind: .serverError, message: "unexpected response: \(output)",
                     )
                 }
-                return LookupResult(try ok.body.json)
+                return try LookupResult(ok.body.json)
             }
         }
     }
@@ -410,7 +410,12 @@ public struct VPNDetectionClient: Sendable {
         answers.reserveCapacity(chunk.count)
         for ip in chunk {
             if let served = body.results.additionalProperties[ip] {
-                answers.append((ip, .success(LookupResult(served))))
+                // An entry it cannot read is that address's error alone.
+                do {
+                    answers.append((ip, .success(try LookupResult(served))))
+                } catch {
+                    answers.append((ip, .failure(VPNDetectionError.wrapping(error))))
+                }
                 continue
             }
             if let failed = body.errors.additionalProperties[ip] {

@@ -173,7 +173,7 @@ public struct Asn: Sendable, Hashable {
 // survives for free: every tier-gated member is already an Optional, so copying
 // it across cannot collapse `false` into "not in your plan".
 extension LookupResult {
-    init(_ body: Components.Schemas.LookupResponse) {
+    init(_ body: Components.Schemas.LookupResponse) throws {
         self.ip = body.ip
         self.isVpn = body.isVpn
         self.isBogon = false
@@ -185,42 +185,42 @@ extension LookupResult {
         self.isDcproxy = body.isDcproxy
         self.isMobproxy = body.isMobproxy
         self.isPubproxy = body.isPubproxy
-        self.vpn = body.vpn.map { VpnDetail($0.value1) }
-        self.hosting = body.hosting.map { ClassDetail($0.value1) }
-        self.relay = body.relay.map { ClassDetail($0.value1) }
-        self.tor = body.tor.map { ClassDetail($0.value1) }
-        self.cdn = body.cdn.map { ClassDetail($0.value1) }
-        self.resproxy = body.resproxy.map { ProxyDetail($0.value1) }
-        self.dcproxy = body.dcproxy.map { ProxyDetail($0.value1) }
-        self.mobproxy = body.mobproxy.map { ProxyDetail($0.value1) }
-        self.pubproxy = body.pubproxy.map { PubproxyDetail($0.value1) }
+        self.vpn = try body.vpn.map { try VpnDetail($0.value1) }
+        self.hosting = try body.hosting.map { try ClassDetail($0.value1) }
+        self.relay = try body.relay.map { try ClassDetail($0.value1) }
+        self.tor = try body.tor.map { try ClassDetail($0.value1) }
+        self.cdn = try body.cdn.map { try ClassDetail($0.value1) }
+        self.resproxy = try body.resproxy.map { try ProxyDetail($0.value1) }
+        self.dcproxy = try body.dcproxy.map { try ProxyDetail($0.value1) }
+        self.mobproxy = try body.mobproxy.map { try ProxyDetail($0.value1) }
+        self.pubproxy = try body.pubproxy.map { try PubproxyDetail($0.value1) }
         self.location = body.location.map(Location.init)
         self.asn = body.asn.map(Asn.init)
     }
 }
 
 extension VpnDetail {
-    init(_ detail: Components.Schemas.VpnDetail) {
+    init(_ detail: Components.Schemas.VpnDetail) throws {
         self.provider = detail.provider
-        self.lastSeen = detail.lastSeen
+        self.lastSeen = try fullDate(detail.lastSeen, "vpn.last_seen")
         self.confidence = detail.confidence
         self.method = detail.method
     }
 }
 
 extension ClassDetail {
-    init(_ detail: Components.Schemas.ClassDetail) {
+    init(_ detail: Components.Schemas.ClassDetail) throws {
         self.provider = detail.provider
         self.confidence = detail.confidence
-        self.lastSeen = detail.lastSeen
+        self.lastSeen = try fullDate(detail.lastSeen, "last_seen")
     }
 }
 
 extension ProxyDetail {
-    init(_ detail: Components.Schemas.ProxyDetail) {
+    init(_ detail: Components.Schemas.ProxyDetail) throws {
         self.provider = detail.provider
-        self.firstSeen = detail.firstSeen
-        self.lastSeen = detail.lastSeen
+        self.firstSeen = try fullDate(detail.firstSeen, "first_seen")
+        self.lastSeen = try fullDate(detail.lastSeen, "last_seen")
         self.hits = detail.hits
         self.hitsDaysPct = detail.hitsDaysPct
         self.providersNum = detail.providersNum
@@ -228,13 +228,13 @@ extension ProxyDetail {
 }
 
 extension PubproxyDetail {
-    init(_ detail: Components.Schemas.PubproxyDetail) {
+    init(_ detail: Components.Schemas.PubproxyDetail) throws {
         self.entry = detail.entry
         self.exit = detail.exit
         self.protocols = detail.protocols
         self.numPorts = detail.numPorts
         self.numProxies = detail.numProxies
-        self.lastSeen = detail.lastSeen
+        self.lastSeen = try fullDate(detail.lastSeen, "pubproxy.last_seen")
         self.lastUsable = detail.lastUsable
     }
 }
@@ -273,4 +273,13 @@ extension Asn {
     /// AS 0 and every other member empty, as the API answers an address no
     /// announcement covers.
     static let empty = Asn(asn: 0, name: "", domain: "", type: "", prefix: "")
+}
+
+// A `format: date` member reaches the generated type as a plain string, so
+// nothing has checked it: `tomorrow` and 30 February came back as served.
+private func fullDate(_ value: String?, _ member: String) throws -> String? {
+    guard let value, !RFC3339.isFullDate(value) else {
+        return value
+    }
+    throw VPNDetectionError.unreadable("\(member) \(value.debugDescription) is no YYYY-MM-DD date")
 }

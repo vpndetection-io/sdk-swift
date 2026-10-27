@@ -56,7 +56,7 @@ public struct DatabaseAPI: Sendable {
                 guard case .ok(let ok) = output else {
                     throw unexpected(output)
                 }
-                return DatabaseMetadata(try ok.body.json)
+                return try DatabaseMetadata(ok.body.json)
             }
         }
     }
@@ -423,11 +423,11 @@ extension Components.Schemas.DatabaseFormat {
 }
 
 extension Database {
-    init(_ wire: Components.Schemas.Database) {
+    init(_ wire: Components.Schemas.Database) throws {
         self.base = wire.base
         self.name = wire.name
         self.summary = wire.summary
-        self.licenseType = wire.licenseType.flatMap(LicenseType.init)
+        self.licenseType = try wire.licenseType.map(LicenseType.init)
         self.starts = wire.starts
         self.expires = wire.expires
         self.renewsAt = wire.renewsAt
@@ -469,16 +469,17 @@ extension DatabaseFormat {
 }
 
 extension Database.LicenseType {
-    /// Failable because the wire enum carries the `null` member the spec needs
-    /// for the field to be nullable at all, and the generator spells it
-    /// `._empty_`. That is the absence of a license, not a kind of one, so it
-    /// becomes nil rather than a case nobody can act on.
-    init?(_ wire: Components.Schemas.Database.LicenseTypePayload) {
+    /// The spec spells "no license" as `nullable: true` PLUS a `null` member of
+    /// the enum, and the generator turns that member into a `._empty_` case
+    /// beside the three real ones. A `null` on the wire decodes as the absent
+    /// Optional, so `._empty_` is what `""` decodes as: no license type the API
+    /// sends, and refused rather than read as no license at all.
+    init(_ wire: Components.Schemas.Database.LicenseTypePayload) throws {
         switch wire {
         case .evaluation: self = .evaluation
         case .standard: self = .standard
         case .redistribute: self = .redistribute
-        default: return nil
+        case ._empty_: throw VPNDetectionError.unreadable("license_type \"\" is no license type")
         }
     }
 }
@@ -495,7 +496,11 @@ extension DatabaseFormatSize {
 }
 
 extension DatabaseMetadata {
-    init(_ wire: Components.Schemas.DatabaseMetadata) {
+    init(_ wire: Components.Schemas.DatabaseMetadata) throws {
+        // `format: date` reaches the generated type as a plain string.
+        guard RFC3339.isFullDate(wire.updated) else {
+            throw VPNDetectionError.unreadable("updated \(wire.updated.debugDescription) is no YYYY-MM-DD date")
+        }
         self.id = wire.id
         self.updateFreq = wire.updateFreq
         self.updated = wire.updated

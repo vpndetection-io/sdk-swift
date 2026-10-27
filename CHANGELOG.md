@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.10.2 - 2026-10-27
+
+### Fixes
+
+- Read dates as RFC 3339 alone, and an empty license type as unreadable ([`2b95065`](https://github.com/vpndetection-io/sdk-swift/commit/2b9506582c576266f0872700e6c0a70b8442c6ba))
+
 ## 4.10.1 - 2026-10-26
 
 ### Fixes

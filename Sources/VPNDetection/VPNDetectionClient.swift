@@ -1,4 +1,5 @@
 import Foundation
+import HTTPTypes
 import OpenAPIRuntime
 
 /// A client for the VPNDetection API.
@@ -25,6 +26,11 @@ public struct VPNDetectionClient: Sendable {
     public let oauth: OauthAPI
 
     private let api: Client
+    // What the batch sends through on its own, since it reads its answer entry by
+    // entry rather than through the generated decoder.
+    private let transport: any ClientTransport
+    private let baseURL: URL
+    private let middlewares: [any ClientMiddleware]
     private let cache: ResultCache?
     private let concurrency: Int
     private let retries: Int
@@ -59,6 +65,9 @@ public struct VPNDetectionClient: Sendable {
             transport: transport,
             middlewares: middlewares,
         )
+        self.transport = transport
+        self.baseURL = baseURL
+        self.middlewares = middlewares
         self.cache = options.cache.map(ResultCache.init)
         self.concurrency = options.concurrency
         self.retries = options.retries
@@ -386,17 +395,11 @@ public struct VPNDetectionClient: Sendable {
     private func sendChunk(
         _ chunk: [String], _ options: BatchOptions,
     ) async throws -> [(String, BatchResults.Outcome)] {
-        let body: Components.Schemas.BatchLookupResponse
+        let answers: [String: BatchResults.Outcome]
         do {
-            body = try await withRetry(options.retries ?? retries) {
+            answers = try await withRetry(options.retries ?? retries) {
                 try await withDeadline(options.timeout ?? timeout) {
-                    let output = try await api.lookupBatch(.init(body: .json(.init(ips: chunk))))
-                    guard case .ok(let ok) = output else {
-                        throw VPNDetectionError(
-                            kind: .serverError, message: "unexpected response: \(output)",
-                        )
-                    }
-                    return try ok.body.json
+                    try await postBatch(chunk)
                 }
             }
         } catch is CancellationError {
@@ -406,28 +409,76 @@ public struct VPNDetectionClient: Sendable {
             let failure = VPNDetectionError.wrapping(error)
             return chunk.map { ($0, .failure(failure)) }
         }
-        var answers: [(String, BatchResults.Outcome)] = []
-        answers.reserveCapacity(chunk.count)
-        for ip in chunk {
-            if let served = body.results.additionalProperties[ip] {
-                // An entry it cannot read is that address's error alone.
-                do {
-                    answers.append((ip, .success(try LookupResult(served))))
-                } catch {
-                    answers.append((ip, .failure(VPNDetectionError.wrapping(error))))
-                }
-                continue
-            }
-            if let failed = body.errors.additionalProperties[ip] {
-                let error = VPNDetectionError.fromEntry(status: failed.status, message: failed.error)
-                answers.append((ip, .failure(error)))
-                continue
-            }
-            answers.append((ip, .failure(VPNDetectionError(
+        return chunk.map { ip in
+            (ip, answers[ip] ?? .failure(VPNDetectionError(
                 kind: .serverError, message: "the batch answer did not include \(ip)", status: 200,
-            ))))
+            )))
+        }
+    }
+
+    /// One `POST /batch` through the client's middlewares, its answer read entry
+    /// by entry. The generated decoder reads the whole `BatchLookupResponse`, so
+    /// through 4.10.2 one entry it could not read failed every address in the
+    /// chunk, retried. An entry it cannot read is now that address's error alone,
+    /// and only an answer holding neither map, or none at all, fails the chunk.
+    private func postBatch(_ chunk: [String]) async throws -> [String: BatchResults.Outcome] {
+        var fields = HTTPFields()
+        fields[.accept] = "application/json"
+        fields[.contentType] = "application/json"
+        let request = HTTPRequest(method: .post, scheme: nil, authority: nil, path: "/batch", headerFields: fields)
+        let payload = try JSONEncoder().encode(Components.Schemas.BatchLookupRequest(ips: chunk))
+        let (response, responseBody) = try await send(request, HTTPBody(payload), operationID: "lookupBatch")
+        let status = Int(response.status.code)
+        let unreadable = { (what: String) in
+            VPNDetectionError(kind: .serverError, message: "\(what) was not the answer this call returns", status: status)
+        }
+        guard let bytes = try? await ArraySlice(collecting: responseBody ?? HTTPBody(), upTo: .max),
+            let envelope = try? answerDecoder().decode(BatchEnvelope.self, from: Data(bytes)),
+            envelope.results != nil || envelope.errors != nil
+        else {
+            throw unreadable("the response")
+        }
+        var answers: [String: BatchResults.Outcome] = [:]
+        for ip in chunk {
+            if let entry = envelope.results?[ip] {
+                guard let served = entry.value else {
+                    answers[ip] = .failure(unreadable("the entry for \(ip)"))
+                    continue
+                }
+                do {
+                    answers[ip] = .success(try LookupResult(served))
+                } catch {
+                    answers[ip] = .failure(VPNDetectionError.wrapping(error))
+                }
+            } else if let entry = envelope.errors?[ip] {
+                guard let failed = entry.value else {
+                    answers[ip] = .failure(unreadable("the error for \(ip)"))
+                    continue
+                }
+                answers[ip] = .failure(VPNDetectionError.fromEntry(status: failed.status, message: failed.error))
+            }
         }
         return answers
+    }
+
+    /// A request through the same middlewares, in the same order, as the
+    /// generated client runs them.
+    private func send(
+        _ request: HTTPRequest, _ body: HTTPBody?, operationID: String,
+    ) async throws -> (HTTPResponse, HTTPBody?) {
+        var next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?) = {
+            [transport] request, body, baseURL in
+            try await transport.send(request, body: body, baseURL: baseURL, operationID: operationID)
+        }
+        for middleware in middlewares.reversed() {
+            let inner = next
+            next = { request, body, baseURL in
+                try await middleware.intercept(
+                    request, body: body, baseURL: baseURL, operationID: operationID, next: inner,
+                )
+            }
+        }
+        return try await next(request, body, baseURL)
     }
 
     // Every flight this batch led and has not landed, so no waiter waits on it.
@@ -564,4 +615,31 @@ private func withoutTrailingSlashes(_ url: URL) -> URL {
         text.removeLast()
     }
     return URL(string: text) ?? url
+}
+
+/// A batch's answer with each entry kept apart, so one the client cannot read
+/// fails only its own address.
+private struct BatchEnvelope: Decodable {
+    var results: [String: Entry<Components.Schemas.LookupResponse>]?
+    var errors: [String: Entry<Components.Schemas.BatchLookupError>]?
+
+    /// One entry, or nil where it could not be read.
+    struct Entry<Value: Decodable>: Decodable {
+        let value: Value?
+
+        init(from decoder: any Decoder) throws {
+            value = try? Value(from: decoder)
+        }
+    }
+}
+
+/// Reads an answer as the generated client does, its dates through the same
+/// transcoder.
+private func answerDecoder() -> JSONDecoder {
+    let decoder = JSONDecoder()
+    let transcoder = RFC3339DateTranscoder()
+    decoder.dateDecodingStrategy = .custom { decoder in
+        try transcoder.decode(decoder.singleValueContainer().decode(String.self))
+    }
+    return decoder
 }

@@ -76,10 +76,15 @@ final class StubTransport: ClientTransport {
 
         // A batch is answered from the addresses in its body rather than from
         // the path. An unrouted address answers the way the API does, so a batch
-        // case can exercise a partial failure without a second stub.
+        // case can exercise a partial failure without a second stub. A route for
+        // "batch" itself is served as it is, for a body the API would never build.
         let route: Route
         if request.method == .post, key == "batch" {
-            route = try await batchRoute(body)
+            if let raw = routes["batch"] {
+                route = raw
+            } else {
+                route = try await batchRoute(body)
+            }
         } else {
             route = routes[key] ?? .json(["error": "not a valid IP address"], status: 400)
         }

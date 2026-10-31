@@ -115,6 +115,9 @@ public struct VPNDetectionClient: Sendable {
         if let timeout {
             try checkTimeout(timeout)
         }
+        if let retries {
+            try checkRetries(retries)
+        }
         // Judged, cached and sent as the IPv4 address it carries, if it is mapped.
         let ip = unmapped(ip)
         if isBogon(ip) {
@@ -188,7 +191,10 @@ public struct VPNDetectionClient: Sendable {
     ///   - retries: Overrides the client's retry count for this call.
     ///   - timeout: Bounds each attempt, as on ``lookup(_:retries:timeout:)``.
     public func myIP(retries: Int? = nil, timeout: Duration? = nil) async throws -> LookupResult {
-        try await withRetry(retries ?? self.retries) {
+        if let retries {
+            try checkRetries(retries)
+        }
+        return try await withRetry(retries ?? self.retries) {
             try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.lookupMyIp()
                 guard case .ok(let ok) = output else {
@@ -226,7 +232,10 @@ public struct VPNDetectionClient: Sendable {
     public func myEntitlement(
         retries: Int? = nil, timeout: Duration? = nil,
     ) async throws -> Entitlement {
-        try await withRetry(retries ?? self.retries) {
+        if let retries {
+            try checkRetries(retries)
+        }
+        return try await withRetry(retries ?? self.retries) {
             try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.myEntitlement()
                 guard case .ok(let ok) = output else {
@@ -269,6 +278,9 @@ public struct VPNDetectionClient: Sendable {
         // accepted or refused depending on which addresses it happened to hold.
         if let timeout = options.timeout {
             try checkTimeout(timeout)
+        }
+        if let retries = options.retries {
+            try checkRetries(retries)
         }
 
         // An IPv4-mapped address is sent as the address it carries, once however

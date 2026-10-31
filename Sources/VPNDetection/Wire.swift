@@ -282,6 +282,15 @@ func checkTimeout(_ timeout: Duration) throws {
     }
 }
 
+/// Refuses a per-call retry count below zero, before anything is sent: through
+/// 4.10.2 one was read as none, and a bogon or a cached address answered it.
+/// The client's own is a `precondition`, since its initializer cannot throw.
+func checkRetries(_ retries: Int) throws {
+    guard retries >= 0 else {
+        throw VPNDetectionError(kind: .badRequest, message: "retries cannot be negative, got \(retries)")
+    }
+}
+
 /// Bounds one attempt with a deadline the library owns.
 ///
 /// Raced rather than left to cancellation: cancelling the attempt releases its

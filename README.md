@@ -176,6 +176,8 @@ let result = try await client.lookup("45.83.91.1", timeout: .seconds(5))
 let databases = try await client.database.list(timeout: .seconds(5))
 ```
 
+`lookup`, `myIP`, `myEntitlement` and a batch take `retries` for that call alone the same way, and one below zero is refused as `badRequest` before any request (from 4.10.3).
+
 ### Database downloads
 
 If your key carries the `db.download` scope, the licensed databases are available through `client.database`. `download` fetches one to a file, streaming it straight to disk so that nothing bigger than a chunk is ever held in memory:

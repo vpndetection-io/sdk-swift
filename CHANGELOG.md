@@ -2,6 +2,13 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.10.3 - 2026-10-31
+
+### Fixes
+
+- Read each batch entry on its own, so one it cannot read fails only its address ([`b76d72a`](https://github.com/vpndetection-io/sdk-swift/commit/b76d72a710a751966f34eed788c28bc08a72e634))
+- Refuse a per-call retries below zero before anything answers ([`7b163e0`](https://github.com/vpndetection-io/sdk-swift/commit/7b163e012658631b16d572bbc9d1d7f7b3c73439))
+
 ## 4.10.2 - 2026-10-27
 
 ### Fixes

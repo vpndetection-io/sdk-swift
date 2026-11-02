@@ -145,7 +145,7 @@ enum RFC3339 {
 ///
 /// Classifying here rather than over the generated per-status output cases is
 /// what makes the range rule enforceable: a status this API does not document
-/// today, such as a 404 from a bad dataset id, arrives with its real number
+/// today, such as a 404 from a bad dataset ID, arrives with its real number
 /// rather than as an `undocumented` case that has to be re-derived.
 struct ErrorMiddleware: ClientMiddleware {
     // Enough for an error envelope from the API or from an intermediary, and

@@ -9,7 +9,7 @@ import VPNDetection
 ///
 /// The transfer is budgeted before it starts. `metadata` publishes a size per
 /// format, and that size is checked against the ceiling below FIRST, so a
-/// mistaken dataset id can never quietly pull one of the gigabyte datasets
+/// mistaken dataset ID can never quietly pull one of the gigabyte datasets
 /// through CI.
 @Suite("Staging database downloads")
 struct DatabaseTests {
@@ -21,7 +21,7 @@ struct DatabaseTests {
     /// tripping it means the suite is pointed somewhere unintended, which is
     /// exactly when a transfer must not go ahead.
     static let ceiling: Int64 = 8 * 1024 * 1024
-    /// A real catalogue id the max organization holds no license for.
+    /// A real catalogue ID the max organization holds no license for.
     static let unlicensedId = "hosting_ip_v1"
 
     @Test("the licensed catalogue answers the family shape", Tier.max.needsKey)
@@ -46,7 +46,7 @@ struct DatabaseTests {
                 licensed.append(dataset.base)
             }
             // The point of the family shape: a license covers the family, and
-            // these are the ids the download and checksum methods take. Before
+            // these are the IDs the download and checksum methods take. Before
             // the spec was corrected this list did not exist, so `list` could
             // not tell a caller what to download.
             #expect(dataset.versions.isEmpty == false, "\(dataset.base) carries no versions")

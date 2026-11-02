@@ -208,7 +208,7 @@ struct ConformanceTests {
         let testCase = corpus.batchCase("an-entry-error-is-classified-by-its-status")
         var routes = StubTransport.answers(for: ["1.1.1.1"])
         routes["8.8.8.8"] = .json(
-            ["error": "request allowance exceeded; raise or remove your overage limit"], status: 429,
+            ["error": "monthly request allowance spent; upgrade your plan for more lookups"], status: 429,
         )
         routes["9.9.9.9"] = .json(["error": "lookup failed"], status: 500)
         let stub = StubTransport(routes)

@@ -13,7 +13,7 @@ public struct Entitlement: Sendable, Hashable {
 
     /// The credential itself.
     ///
-    /// The key is never echoed back - only its id, which is what the console
+    /// The key is never echoed back - only its ID, which is what the console
     /// shows and what you can act on.
     public struct Apikey: Sendable, Hashable {
         public let id: String

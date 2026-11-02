@@ -274,7 +274,7 @@ private func split(_ url: URL) throws -> (origin: URL, path: String) {
 /// The formats a dataset is published in.
 ///
 /// Not every dataset is built in every format: the `_provider` catalogs are
-/// keyed by provider id rather than by IP range, so no MMDB exists for them.
+/// keyed by provider ID rather than by IP range, so no MMDB exists for them.
 public enum DatabaseFormat: String, Sendable, Hashable, CaseIterable {
     case csvgz
     case mmdb
@@ -283,7 +283,7 @@ public enum DatabaseFormat: String, Sendable, Hashable, CaseIterable {
 /// One dataset FAMILY your organization holds a license for.
 ///
 /// A license is held against the family, while a download names a version, so
-/// the ids the download and checksum methods take come from ``versions`` rather
+/// the IDs the download and checksum methods take come from ``versions`` rather
 /// than from this type.
 public struct Database: Sendable, Hashable {
     /// The dataset family, e.g. `vpn_ip`. What the license is held against.
@@ -331,7 +331,7 @@ public struct Database: Sendable, Hashable {
 
 /// One published version of a licensed family.
 public struct DatabaseVersion: Sendable, Hashable {
-    /// The versioned dataset id, e.g. `vpn_ip_v1`. This is what a download takes.
+    /// The versioned dataset ID, e.g. `vpn_ip_v1`. This is what a download takes.
     public let id: String
     public let version: Int
     public let summary: String?

@@ -63,7 +63,7 @@ extension VPNDetectionError {
     /// The decision is made on the STATUS RANGE, never on an enumerated list of
     /// the statuses this API happens to document today. Mapping 400/401/403/429
     /// and letting the rest fall through to the `serverError` default is the
-    /// easy mistake, and it makes a 404 from a bad dataset id retryable.
+    /// easy mistake, and it makes a 404 from a bad dataset ID retryable.
     ///
     /// - Parameter fallback: What to say when the answer carried no envelope,
     ///   for a caller such as object storage whose failures never do.

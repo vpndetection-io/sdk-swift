@@ -502,7 +502,7 @@ struct ClientTests {
         #expect(databases[0].starts == databases[1].starts?.addingTimeInterval(0.118))
     }
 
-    @Test("a 404 from a bad dataset id is not retried")
+    @Test("a 404 from a bad dataset ID is not retried")
     func unknownDatasetIsNotRetried() async throws {
         let stub = StubTransport([
             "/api/v1/database/metadata": .json(["rc": "NOT_FOUND"], status: 404)

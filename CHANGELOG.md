@@ -2,6 +2,19 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.11.0 - 2026-11-07
+
+### Features
+
+- Download the build a database.updated webhook names ([`9d5a968`](https://github.com/vpndetection-io/sdk-swift/commit/9d5a968a0d4d41386e5fd2736195cf5421a54e14))
+
+### Fixes
+
+- Re-pin the spec to 2026.11.05: the download's build parameter ([`e7a48b0`](https://github.com/vpndetection-io/sdk-swift/commit/e7a48b01211a938afa193efab0666b73722fc39a))
+- Re-pin the spec to 2026.11.03: a proxy flag keeps its last values ([`13983ff`](https://github.com/vpndetection-io/sdk-swift/commit/13983ff9141357fa7c0cdfd49f9c56766d996531))
+- Re-pin the spec to 2026.11.02: ID and IDs in its descriptions ([`6c27f70`](https://github.com/vpndetection-io/sdk-swift/commit/6c27f7011ec63948da813859db7f78cd0bdec01b))
+- Re-pin the spec to 2026.11.02: two spent-allowance messages ([`a39095f`](https://github.com/vpndetection-io/sdk-swift/commit/a39095f9f62c17c2502d2aaef901e8428b358bd9))
+
 ## 4.10.3 - 2026-10-31
 
 ### Fixes

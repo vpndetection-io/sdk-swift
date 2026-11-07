@@ -653,6 +653,49 @@ struct DownloadTransferTests {
         )
     }
 
+    @Test("each call asks for the build it is given, and none without one")
+    func eachCallAsksForItsBuild() async throws {
+        let origins = try await Origins.start(.file(Self.payload))
+        defer { origins.stop() }
+        let directory = try scratchDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let build = "20261105.0t53s5"
+
+        _ = try await origins.client.database.downloadURL(id: "cdn_ip_v1", format: .csvgz)
+        _ = try await origins.client.database.downloadURL(id: "cdn_ip_v1", format: .csvgz, build: build)
+        _ = try await origins.client.database.download(
+            "cdn_ip_v1", format: .csvgz, to: directory.appendingPathComponent("build.csv.gz"), build: build,
+        )
+        _ = try await origins.client.database.downloadBytes("cdn_ip_v1", format: .csvgz, build: build)
+
+        let live = "/api/v1/database/download?id=cdn_ip_v1&format=csvgz"
+        #expect(origins.api.receivedPaths == [live] + Array(repeating: "\(live)&build=\(build)", count: 3))
+    }
+
+    // A pruned build is gone for good, so asking again cannot help.
+    @Test("a build no longer kept is a badRequest with its 410, sent once")
+    func aBuildNoLongerKeptIsSentOnce() async throws {
+        let api = try await TestOrigin.start { _ in
+            TestOrigin.Answer(
+                status: .gone,
+                headers: [("Content-Type", "application/json")],
+                body: Array(#"{"rc":"BUILD_GONE"}"#.utf8),
+            )
+        }
+        defer { Task { try? await api.stop() } }
+        let client = VPNDetectionClient(
+            options: .init(apiKey: "key", baseURL: URL(string: "http://127.0.0.1:\(api.port)")!, retries: 3),
+        )
+
+        let failure = await #expect(throws: VPNDetectionError.self) {
+            try await client.database.downloadBytes("cdn_ip_v1", format: .csvgz, build: "20261029.abc123")
+        }
+
+        #expect(try #require(failure).kind == .badRequest)
+        #expect(try #require(failure).status == 410)
+        #expect(api.receivedPaths.count == 1)
+    }
+
     @Test("downloadBytes hands back the same bytes")
     func downloadBytesMatchesTheFile() async throws {
         let origins = try await Origins.start(.file(Self.payload))

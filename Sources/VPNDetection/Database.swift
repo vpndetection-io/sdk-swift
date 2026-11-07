@@ -2,7 +2,7 @@ import Foundation
 import HTTPTypes
 import OpenAPIRuntime
 
-/// Where a streaming ``DatabaseAPI/download(_:format:to:)`` puts each chunk as
+/// Where a streaming ``DatabaseAPI/download(_:format:to:build:)`` puts each chunk as
 /// it arrives.
 public typealias DownloadSink = (ArraySlice<UInt8>) async throws -> Void
 
@@ -112,16 +112,21 @@ public struct DatabaseAPI: Sendable {
     /// own and it follows them, this throws rather than handing back a URL,
     /// because by then the transport is holding the dataset.
     ///
-    /// - Parameter timeout: Overrides the client's ``VPNDetectionClient/Options/timeout``
-    ///   for each attempt at MINTING the link, which is an ordinary API request.
-    ///   It says nothing about the transfer you then run with it.
+    /// - Parameters:
+    ///   - build: One build of the dataset, by the name a `database.updated`
+    ///     webhook gives it, so the file is the one whose `sha256` the webhook
+    ///     carries; `nil`, the build that is live. A build is kept 7 days, and
+    ///     one pruned since is a `badRequest` with status 410.
+    ///   - timeout: Overrides the client's ``VPNDetectionClient/Options/timeout``
+    ///     for each attempt at MINTING the link, which is an ordinary API request.
+    ///     It says nothing about the transfer you then run with it.
     public func downloadURL(
-        id: String, format: DatabaseFormat, timeout: Duration? = nil,
+        id: String, format: DatabaseFormat, build: String? = nil, timeout: Duration? = nil,
     ) async throws -> URL {
         try await withRetry(retries) {
             try await withDeadline(timeout ?? self.timeout) {
                 let output = try await api.downloadDatabase(
-                    query: .init(id: id, format: .init(format)),
+                    query: .init(id: id, format: .init(format), build: build),
                 )
                 guard case .found(let found) = output else {
                     throw unexpected(output)
@@ -150,8 +155,12 @@ public struct DatabaseAPI: Sendable {
     /// than a ``VPNDetectionError``: a reset socket and a full disk are
     /// different problems, and flattening both into one kind hides the one you
     /// can do something about.
+    ///
+    /// `build` asks for one build of the dataset, as in ``downloadURL(id:format:build:timeout:)``.
     @discardableResult
-    public func download(_ id: String, format: DatabaseFormat, to fileURL: URL) async throws -> Int64 {
+    public func download(
+        _ id: String, format: DatabaseFormat, to fileURL: URL, build: String? = nil,
+    ) async throws -> Int64 {
         let manager = FileManager.default
         let partial = fileURL.appendingPathExtension("part")
         guard manager.createFile(atPath: partial.path, contents: nil) else {
@@ -161,9 +170,9 @@ public struct DatabaseAPI: Sendable {
         }
         let handle = try FileHandle(forWritingTo: partial)
         do {
-            let written = try await download(id, format: format) { chunk in
+            let written = try await download(id, format: format, to: { chunk in
                 try handle.write(contentsOf: chunk)
-            }
+            }, build: build)
             try handle.close()
             if manager.fileExists(atPath: fileURL.path) {
                 try manager.removeItem(at: fileURL)
@@ -184,11 +193,13 @@ public struct DatabaseAPI: Sendable {
     /// else: a parser, an archive, another socket. The sink is awaited, so
     /// back pressure is real and a slow sink slows the transfer rather than
     /// queueing behind it.
+    ///
+    /// `build` asks for one build of the dataset, as in ``downloadURL(id:format:build:timeout:)``.
     @discardableResult
     public func download(
-        _ id: String, format: DatabaseFormat, to sink: DownloadSink,
+        _ id: String, format: DatabaseFormat, to sink: DownloadSink, build: String? = nil,
     ) async throws -> Int64 {
-        let body = try await databaseFile(id, format)
+        let body = try await databaseFile(id, format, build)
         var written: Int64 = 0
         for try await chunk in body {
             try await sink(chunk)
@@ -203,13 +214,16 @@ public struct DatabaseAPI: Sendable {
     /// orders of magnitude: `cdn_ip_v1` is 10 KB while `resproxy_ip_90d_v1` is
     /// 1.79 GB of csv.gz, which will cost you that much resident memory and can
     /// fail outright. Reach for this at the small end, where the bytes are going
-    /// straight into a parser; use ``download(_:format:to:)`` for anything you
-    /// have not measured.
-    public func downloadBytes(_ id: String, format: DatabaseFormat) async throws -> Data {
+    /// straight into a parser; use ``download(_:format:to:build:)`` for anything you
+    /// have not measured. `build` asks for one build of the dataset, as in
+    /// ``downloadURL(id:format:build:timeout:)``.
+    public func downloadBytes(
+        _ id: String, format: DatabaseFormat, build: String? = nil,
+    ) async throws -> Data {
         var data = Data()
-        _ = try await download(id, format: format) { chunk in
+        _ = try await download(id, format: format, to: { chunk in
             data.append(contentsOf: chunk)
-        }
+        }, build: build)
         return data
     }
 
@@ -220,8 +234,10 @@ public struct DatabaseAPI: Sendable {
     //
     // The body is returned unread, so the attempt's deadline ends at the response
     // head and a multi-gigabyte transfer is never racing it.
-    private func databaseFile(_ id: String, _ format: DatabaseFormat) async throws -> HTTPBody {
-        let url = try await downloadURL(id: id, format: format)
+    private func databaseFile(
+        _ id: String, _ format: DatabaseFormat, _ build: String?,
+    ) async throws -> HTTPBody {
+        let url = try await downloadURL(id: id, format: format, build: build)
         let (origin, path) = try split(url)
         return try await withRetry(retries) {
             try await withDeadline(timeout) {

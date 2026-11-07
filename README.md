@@ -201,6 +201,14 @@ let bytes = try await client.database.downloadBytes("cdn_ip_v1", format: .csvgz)
 
 `downloadBytes` holds the whole file in memory, and the catalog runs from `cdn_ip_v1` at 10 KB to `resproxy_ip_90d_v1` at 1.79 GB, so use `download` for anything you have not measured.
 
+From 4.11.0, each of the three takes `build`, the build a `database.updated` webhook names, so the file is the one whose `sha256` the webhook carries rather than whatever is live by the time you ask. Without it you get the live build. A build is kept 7 days, and one pruned since is a `badRequest` with status 410:
+
+```swift
+// dataset and build from a database.updated webhook's data
+let file = URL(fileURLWithPath: "\(dataset).mmdb")
+try await client.database.download(dataset, format: .mmdb, to: file, build: build)
+```
+
 From 4.3.0, `list`, `metadata`, `checksums`, `downloads` and `downloadURL` each take a `timeout` bounding each attempt at that one call in place of the client's:
 
 ```swift

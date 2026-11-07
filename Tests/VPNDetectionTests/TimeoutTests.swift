@@ -199,15 +199,15 @@ struct TimeoutTests {
             client.database.checksums(id:format:timeout:)
         let downloads: (Int?, Duration?) async throws -> [Download] =
             client.database.downloads(limit:timeout:)
-        let downloadURL: (String, DatabaseFormat, Duration?) async throws -> URL =
-            client.database.downloadURL(id:format:timeout:)
+        let downloadURL: (String, DatabaseFormat, String?, Duration?) async throws -> URL =
+            client.database.downloadURL(id:format:build:timeout:)
 
-        let toFile: (String, DatabaseFormat, URL) async throws -> Int64 =
-            client.database.download(_:format:to:)
-        let toSink: (String, DatabaseFormat, DownloadSink) async throws -> Int64 =
-            client.database.download(_:format:to:)
-        let toBytes: (String, DatabaseFormat) async throws -> Data =
-            client.database.downloadBytes(_:format:)
+        let toFile: (String, DatabaseFormat, URL, String?) async throws -> Int64 =
+            client.database.download(_:format:to:build:)
+        let toSink: (String, DatabaseFormat, DownloadSink, String?) async throws -> Int64 =
+            client.database.download(_:format:to:build:)
+        let toBytes: (String, DatabaseFormat, String?) async throws -> Data =
+            client.database.downloadBytes(_:format:build:)
 
         // One of them is called, so these are live code rather than a comment the
         // compiler happens to check.

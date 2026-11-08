@@ -2,6 +2,13 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.11.1 - 2026-11-08
+
+### Fixes
+
+- Restore 4.10's download signatures beside the build overloads ([`746df74`](https://github.com/vpndetection-io/sdk-swift/commit/746df746849ebe4b2e7eef81b885744edbbc0ba9))
+- Hand back the download link exactly as served, its escapes intact ([`f5f8b4b`](https://github.com/vpndetection-io/sdk-swift/commit/f5f8b4bde2d522843026d0c99bf304b704f524b7))
+
 ## 4.11.0 - 2026-11-07
 
 ### Features

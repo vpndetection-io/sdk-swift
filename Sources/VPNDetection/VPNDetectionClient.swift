@@ -565,7 +565,7 @@ extension VPNDetectionClient {
         public var timeout: Duration
         /// Override the HTTP implementation. Anything you supply owns its own
         /// redirect policy, and the download endpoint's `302` must not be
-        /// followed; see ``DatabaseAPI/downloadURL(id:format:build:timeout:)``.
+        /// followed; see ``DatabaseAPI/downloadURL(id:format:timeout:)``.
         public var transport: (any ClientTransport)?
 
         public init(

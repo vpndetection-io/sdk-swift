@@ -199,21 +199,32 @@ struct TimeoutTests {
             client.database.checksums(id:format:timeout:)
         let downloads: (Int?, Duration?) async throws -> [Download] =
             client.database.downloads(limit:timeout:)
-        let downloadURL: (String, DatabaseFormat, String?, Duration?) async throws -> URL =
+        let downloadURL: (String, DatabaseFormat, Duration?) async throws -> URL =
+            client.database.downloadURL(id:format:timeout:)
+        let buildURL: (String, DatabaseFormat, String?, Duration?) async throws -> URL =
             client.database.downloadURL(id:format:build:timeout:)
 
-        let toFile: (String, DatabaseFormat, URL, String?) async throws -> Int64 =
+        // 4.10's transfers keep their signatures beside the build overloads, so
+        // a protocol or a reference written from them still compiles.
+        let toFile: (String, DatabaseFormat, URL) async throws -> Int64 =
+            client.database.download(_:format:to:)
+        let toSink: (String, DatabaseFormat, DownloadSink) async throws -> Int64 =
+            client.database.download(_:format:to:)
+        let toBytes: (String, DatabaseFormat) async throws -> Data =
+            client.database.downloadBytes(_:format:)
+        let buildToFile: (String, DatabaseFormat, URL, String?) async throws -> Int64 =
             client.database.download(_:format:to:build:)
-        let toSink: (String, DatabaseFormat, DownloadSink, String?) async throws -> Int64 =
+        let buildToSink: (String, DatabaseFormat, DownloadSink, String?) async throws -> Int64 =
             client.database.download(_:format:to:build:)
-        let toBytes: (String, DatabaseFormat, String?) async throws -> Data =
+        let buildToBytes: (String, DatabaseFormat, String?) async throws -> Data =
             client.database.downloadBytes(_:format:build:)
 
         // One of them is called, so these are live code rather than a comment the
         // compiler happens to check.
         #expect(try await list(.seconds(5)).isEmpty)
         #expect(await stub.callCount == 1)
-        _ = (metadata, checksums, downloads, downloadURL, toFile, toSink, toBytes)
+        _ = (metadata, checksums, downloads, downloadURL, buildURL)
+        _ = (toFile, toSink, toBytes, buildToFile, buildToSink, buildToBytes)
     }
 
     // Cancelling releases the connection, but only a transport that HONORS

@@ -130,13 +130,18 @@ public struct DatabaseAPI: Sendable {
     ) async throws -> URL {
         try await withRetry(retries) {
             try await withDeadline(timeout ?? self.timeout) {
-                let output = try await api.downloadDatabase(
-                    query: .init(id: id, format: .init(format), build: build),
-                )
-                guard case .found(let found) = output else {
+                let served = ServedLocation.Capture()
+                let output = try await ServedLocation.$current.withValue(served) {
+                    try await api.downloadDatabase(
+                        query: .init(id: id, format: .init(format), build: build),
+                    )
+                }
+                guard case .found = output else {
                     throw unexpected(output)
                 }
-                guard let location = found.headers.location, let url = URL(string: location) else {
+                // The header as served: the generated `found.headers.location` is
+                // percent-decoded, which changes what the link's signature covers.
+                guard let location = served.location, let url = URL(string: location) else {
                     throw VPNDetectionError(
                         kind: .serverError,
                         message: "the download redirect carried no usable Location header",

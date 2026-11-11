@@ -42,8 +42,9 @@ public struct LookupResult: Sendable, Hashable {
     /// The AS announcing the address. Every answer carries it, with or without
     /// a key.
     public let asn: Asn?
-    /// On a Trial key's answers only: `false` while the organization's 100 full
-    /// answers for the UTC day last, `true` once the answer is Unlimited's.
+    /// On answers to a key on the free plan only: `false` while its organization's
+    /// daily trial lasts (every field for the first 100 lookups each UTC day),
+    /// `true` once the answer has Unlimited's.
     public let trialExpired: Bool?
 }
 

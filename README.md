@@ -30,7 +30,7 @@ Requires Swift 6.1 or newer, and macOS 13, iOS 16, tvOS 16, watchOS 9 or visionO
 
 ## Usage
 
-**No API key needed to start.** The Unlimited tier answers `ip`, `is_vpn`, Tor and relay detection, `location` and `asn`, with no daily or monthly cap, with a key or without one.
+**No API key needed to start.** Unlimited, the free plan, answers `ip`, `is_vpn`, Tor and relay detection, `location` and `asn`, with no daily or monthly cap, with a key or without one.
 
 ```swift
 import VPNDetection
@@ -45,7 +45,7 @@ print(result.asn?.name)             // who runs the announcing network
 
 ### With an API key
 
-Every paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider, confidence and last-seen detail behind each flag. The plans differ only in how many lookups they include, and a new account can try every field, 100 lookups a day. Create a key in the [console](https://app.vpndetection.io), then pass it in:
+Every paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider, confidence and last-seen detail behind each flag. The plans differ only in how many lookups they include, and a free account tries every field, 100 lookups a day. Create a key in the [console](https://app.vpndetection.io), then pass it in:
 
 ```swift
 let client = VPNDetectionClient(apiKey: ProcessInfo.processInfo.environment["VPNDETECTION_API_KEY"]!)
@@ -80,7 +80,7 @@ print(acct.usage.requests)    // 580
 print(acct.usage.windowEnd)   // when the allowance resets
 ```
 
-Usage counts against the anniversary of your subscription on a paid plan, not the calendar month and not the billing period, and against the UTC day on a trial key; it is the same number a lookup is gated on. `hardLimit` is `nil` on an uncapped plan, which is not the same as zero.
+Usage counts against the anniversary of your subscription on a paid plan, not the calendar month and not the billing period, and against the UTC day on the free plan; it is the same number a lookup is gated on. `hardLimit` is `nil` on an uncapped plan, which is not the same as zero.
 
 ### Batch lookup
 
@@ -273,12 +273,12 @@ Each redirect URI must be https on a public host name, or http on a loopback add
 
 ### Absent is not false
 
-The Unlimited tier leaves out `isHosting`, `isCdn` and the four proxy flags, and of the detail behind each flag it answers only Tor's and relay's; a trial key's answer carries `trialExpired`, true once its day of full answers is spent. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
+Unlimited leaves out `isHosting`, `isCdn` and the four proxy flags, and of the detail behind each flag it answers only Tor's and relay's; a free-plan key's answer carries `trialExpired`, true once its daily trial is spent. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
 
 ```swift
 result.isHosting ?? false   // when you only want the flag
-result.isHosting == nil     // on the Unlimited tier: not in your plan
-result.trialExpired == true // a trial key's day of full answers is spent
+result.isHosting == nil     // on Unlimited: not in your plan
+result.trialExpired == true // a free-plan key's daily trial is spent
 ```
 
 ### Supplying your own transport

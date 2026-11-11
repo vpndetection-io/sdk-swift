@@ -27,7 +27,7 @@ struct LookupTests {
         print("testing against \(staging.absoluteString)")
     }
 
-    @Test("a trial key reaches the wire and its answer keeps the shape", Tier.trial.needsKey)
+    @Test("a free-plan key reaches the wire and its answer keeps the shape", Tier.trial.needsKey)
     func trialKeepsTheShape() async throws {
         assertServedByTier(try await Answers.shared.fixture(for: .trial))
     }
@@ -148,7 +148,7 @@ struct LookupTests {
         #expect(await transport.facts.map(\.path) == ["/batch"], "one request, never retried")
     }
 
-    @Test("a trial key's batch of two is refused as a bad request, once", Tier.trial.needsKey)
+    @Test("a free-plan key's batch of two is refused as a bad request, once", Tier.trial.needsKey)
     func trialBatchOfTwoIsRefused() async throws {
         let transport = RecordingTransport(key: Tier.trial.key)
         let client = clientFor(.trial, transport: transport)
@@ -157,7 +157,7 @@ struct LookupTests {
 
         for ip in [probe, "8.8.8.8"] {
             guard case .failure(let error) = try #require(results[ip]) else {
-                Issue.record("\(ip): a trial key's batch of two must fail")
+                Issue.record("\(ip): a free-plan key's batch of two must fail")
                 continue
             }
             #expect(error.kind == .badRequest)
@@ -167,13 +167,13 @@ struct LookupTests {
         #expect(await transport.facts.map(\.path) == ["/batch"], "one request, never retried")
     }
 
-    @Test("a trial key's batch of one is answered", Tier.trial.needsKey)
+    @Test("a free-plan key's batch of one is answered", Tier.trial.needsKey)
     func trialBatchOfOneIsAnswered() async throws {
         let client = clientFor(.trial, transport: RecordingTransport(key: Tier.trial.key))
 
         let results = try await client.lookupBatch([probe])
 
-        #expect(try results[probe]?.get().ip == probe, "a trial key's batch of one failed")
+        #expect(try results[probe]?.get().ip == probe, "a free-plan key's batch of one failed")
     }
 
     // A batch needs a paid plan, and starter is the cheapest.

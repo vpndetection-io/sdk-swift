@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.13.0 - 2026-11-11
+
+### Features
+
+- Add trialExpired for a trial key's answers, and re-pin the spec ([`812853e`](https://github.com/vpndetection-io/sdk-swift/commit/812853eb1e96f838d05405bbf14e91988d8dc569))
+
 ## 4.12.2 - 2026-11-11
 
 ### Fixes

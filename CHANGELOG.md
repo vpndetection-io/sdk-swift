@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.12.2 - 2026-11-11
+
+### Fixes
+
+- Name the Unlimited tier and its terms, and re-pin the spec ([`ae30120`](https://github.com/vpndetection-io/sdk-swift/commit/ae30120afe6d779c2a0ea9d702cb857f14171fe4))
+
 ## 4.12.1 - 2026-11-11
 
 ### Fixes

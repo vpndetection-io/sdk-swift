@@ -536,8 +536,8 @@ extension VPNDetectionClient {
     /// API key against production.
     public struct Options: Sendable {
         /// Your API key. Without one a lookup answers `ip`, `is_vpn`, the Tor
-        /// and relay members, `location` and `asn`, up to 60 a minute from each
-        /// address, and a batch is refused as unauthorized; a free key adds every
+        /// and relay members, `location` and `asn`, with no daily or monthly cap,
+        /// and a batch is refused as unauthorized; a free key adds every
         /// other flag, and every paid plan answers every field.
         public var apiKey: String?
         /// Where the API is served. Default ``VPNDetectionClient/defaultBaseURL``.

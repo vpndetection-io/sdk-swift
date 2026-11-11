@@ -168,6 +168,7 @@ enum Wire {
         "is_dcproxy": { $0.isDcproxy },
         "is_mobproxy": { $0.isMobproxy },
         "is_pubproxy": { $0.isPubproxy },
+        "trial_expired": { $0.trialExpired },
     ]
 
     static let details: [String: @Sendable (LookupResult) -> [String: JSONValue]?] = [

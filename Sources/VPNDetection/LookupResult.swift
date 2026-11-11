@@ -24,8 +24,7 @@ public struct LookupResult: Sendable, Hashable {
     public let isDcproxy: Bool?
     public let isMobproxy: Bool?
     /// Whether a public proxy, one anyone can connect through, listens on the
-    /// address or sends its traffic out from it. With any key, a free one
-    /// included.
+    /// address or sends its traffic out from it. On every paid plan.
     public let isPubproxy: Bool?
 
     public let vpn: VpnDetail?
@@ -43,6 +42,9 @@ public struct LookupResult: Sendable, Hashable {
     /// The AS announcing the address. Every answer carries it, with or without
     /// a key.
     public let asn: Asn?
+    /// On a Trial key's answers only: `false` while the organization's 100 full
+    /// answers for the UTC day last, `true` once the answer is Unlimited's.
+    public let trialExpired: Bool?
 }
 
 /// What is known about the VPN attribution.
@@ -197,6 +199,7 @@ extension LookupResult {
         self.pubproxy = try body.pubproxy.map { try PubproxyDetail($0.value1) }
         self.location = body.location.map(Location.init)
         self.asn = body.asn.map(Asn.init)
+        self.trialExpired = body.trialExpired
     }
 }
 

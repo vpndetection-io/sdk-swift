@@ -218,10 +218,11 @@ public struct VPNDetectionClient: Sendable {
     /// built without an API key gets an unauthorized error rather than a
     /// partial one.
     ///
-    /// Usage counts against the ALLOWANCE WINDOW - the anniversary of the
-    /// subscription, not the calendar month and not the billing period - and it
-    /// is the same number a lookup is gated on. It can lag by a few seconds,
-    /// because requests are counted in memory and flushed in aggregate.
+    /// Usage counts against the ALLOWANCE WINDOW - on a paid plan the
+    /// anniversary of the subscription, not the calendar month and not the
+    /// billing period, and on a trial key the UTC day - and it is the same
+    /// number a lookup is gated on. It can lag by a few seconds, because
+    /// requests are counted in memory and flushed in aggregate.
     ///
     /// Deliberately NOT cached: the whole point is what has been spent, and a
     /// cached answer is a wrong one within seconds of the next request.
@@ -258,8 +259,9 @@ public struct VPNDetectionClient: Sendable {
     /// error as its value, so one bad entry cannot lose the rest of the answers:
     /// the API reports a per-entry failure with the status the single lookup
     /// would have answered, and a chunk that fails as a whole marks every
-    /// address in it. The batch endpoint needs an API key, a free one included:
-    /// without one, every address sent to it carries an unauthorized error.
+    /// address in it. The batch endpoint needs a paid plan: without a key every
+    /// address sent to it carries an unauthorized error, and a trial key's batch
+    /// of two or more a bad request (HTTP 402).
     ///
     /// Throws only when cancelled, or when ``BatchOptions/concurrency`` is below
     /// 1 or ``BatchOptions/timeout`` is a bound no attempt could meet, each
@@ -535,10 +537,10 @@ extension VPNDetectionClient {
     /// How a client behaves. Everything has a default; an empty `Options` is no
     /// API key against production.
     public struct Options: Sendable {
-        /// Your API key. Without one a lookup answers `ip`, `is_vpn`, the Tor
-        /// and relay members, `location` and `asn`, with no daily or monthly cap,
-        /// and a batch is refused as unauthorized; a free key adds every
-        /// other flag, and every paid plan answers every field.
+        /// Your API key. Without one a lookup is on the Unlimited tier: `ip`,
+        /// `is_vpn`, the Tor and relay members, `location` and `asn`, with no
+        /// daily or monthly cap. Every paid plan answers every field, and a
+        /// batch needs one.
         public var apiKey: String?
         /// Where the API is served. Default ``VPNDetectionClient/defaultBaseURL``.
         ///

@@ -63,7 +63,7 @@ extension LookupResult {
             isResproxy: false, isDcproxy: false, isMobproxy: false, isPubproxy: false,
             vpn: vpn, hosting: classDetail, relay: classDetail, tor: classDetail,
             cdn: classDetail, resproxy: proxy, dcproxy: proxy, mobproxy: proxy, pubproxy: pubproxy,
-            location: .empty, asn: .empty,
+            location: .empty, asn: .empty, trialExpired: nil,
         )
     }
 }

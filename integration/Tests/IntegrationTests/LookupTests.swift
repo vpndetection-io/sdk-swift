@@ -27,9 +27,9 @@ struct LookupTests {
         print("testing against \(staging.absoluteString)")
     }
 
-    @Test("a free key reaches the wire and its answer keeps the shape", Tier.free.needsKey)
-    func freeKeepsTheShape() async throws {
-        assertServedByTier(try await Answers.shared.fixture(for: .free))
+    @Test("a trial key reaches the wire and its answer keeps the shape", Tier.trial.needsKey)
+    func trialKeepsTheShape() async throws {
+        assertServedByTier(try await Answers.shared.fixture(for: .trial))
     }
 
     @Test("a starter key reaches the wire and its answer keeps the shape", Tier.starter.needsKey)
@@ -75,7 +75,9 @@ struct LookupTests {
                     )
                 }
             }
-            below = (tier, fields)
+            if tier != .trial {
+                below = (tier, fields)
+            }
         }
     }
 
@@ -100,7 +102,9 @@ struct LookupTests {
                 )
                 print("\(tier.rawValue) adds \(added.sorted().joined(separator: ", "))")
             }
-            below = (tier, fields)
+            if tier != .trial {
+                below = (tier, fields)
+            }
             top = fixture
         }
 
@@ -144,11 +148,39 @@ struct LookupTests {
         #expect(await transport.facts.map(\.path) == ["/batch"], "one request, never retried")
     }
 
-    // A batch needs a key, and the free one is the cheapest that has it.
-    @Test("a batch collapses duplicates and keeps bogons off the wire", Tier.free.needsKey)
+    @Test("a trial key's batch of two is refused as a bad request, once", Tier.trial.needsKey)
+    func trialBatchOfTwoIsRefused() async throws {
+        let transport = RecordingTransport(key: Tier.trial.key)
+        let client = clientFor(.trial, transport: transport)
+
+        let results = try await client.lookupBatch([probe, "8.8.8.8"])
+
+        for ip in [probe, "8.8.8.8"] {
+            guard case .failure(let error) = try #require(results[ip]) else {
+                Issue.record("\(ip): a trial key's batch of two must fail")
+                continue
+            }
+            #expect(error.kind == .badRequest)
+            #expect(error.status == 402)
+            #expect(!error.isRetryable)
+        }
+        #expect(await transport.facts.map(\.path) == ["/batch"], "one request, never retried")
+    }
+
+    @Test("a trial key's batch of one is answered", Tier.trial.needsKey)
+    func trialBatchOfOneIsAnswered() async throws {
+        let client = clientFor(.trial, transport: RecordingTransport(key: Tier.trial.key))
+
+        let results = try await client.lookupBatch([probe])
+
+        #expect(try results[probe]?.get().ip == probe, "a trial key's batch of one failed")
+    }
+
+    // A batch needs a paid plan, and starter is the cheapest.
+    @Test("a batch collapses duplicates and keeps bogons off the wire", Tier.starter.needsKey)
     func batchDedupesAndSkipsBogons() async throws {
-        let transport = RecordingTransport(key: Tier.free.key)
-        let client = clientFor(.free, transport: transport)
+        let transport = RecordingTransport(key: Tier.starter.key)
+        let client = clientFor(.starter, transport: transport)
 
         let results = try await client.lookupBatch([probe, "8.8.8.8", probe, "10.0.0.1", "8.8.8.8"])
 
@@ -158,7 +190,7 @@ struct LookupTests {
         // cannot read as a failure to deduplicate.
         let asked = Set(await transport.facts.map(\.path))
         #expect(asked == ["/batch"])
-        #expect(await transport.facts.allSatisfy(\.carriedKey), "the free key never reached the wire")
+        #expect(await transport.facts.allSatisfy(\.carriedKey), "the paid key never reached the wire")
         #expect(try results["10.0.0.1"]?.get().isBogon == true)
         for ip in [probe, "8.8.8.8"] {
             assertShape(try #require(results[ip]).get())

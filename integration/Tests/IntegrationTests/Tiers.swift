@@ -10,7 +10,7 @@ import Testing
 /// unauthenticated rung and make every comparison against it vacuously true.
 enum Tier: String, CaseIterable, Sendable {
     case unauth
-    case free
+    case trial
     case starter
     case scale
     case max
@@ -20,7 +20,7 @@ enum Tier: String, CaseIterable, Sendable {
     var secret: String? {
         switch self {
         case .unauth: nil
-        case .free: "VPNDETECTION_STAGING_KEY_FREE"
+        case .trial: "VPNDETECTION_STAGING_KEY_FREE"
         case .starter: "VPNDETECTION_STAGING_KEY_STARTER"
         case .scale: "VPNDETECTION_STAGING_KEY_SCALE"
         case .max: "VPNDETECTION_STAGING_KEY_MAX"
@@ -28,13 +28,15 @@ enum Tier: String, CaseIterable, Sendable {
     }
 
     /// What this rung promises against whichever observable rung sits below it.
-    /// A free key serves strictly more than no key, and the first paid tier
-    /// strictly more than a free key; every paid plan answers the same fields,
-    /// so a higher paid tier only keeps what the one under it serves.
+    /// The first paid tier serves strictly more than no key; every paid plan
+    /// answers the same fields, so a higher paid tier only keeps what the one
+    /// under it serves. The trial key's answer is a paid one for its
+    /// organization's first 100 lookups of the UTC day and Unlimited's after, so
+    /// it promises nothing and is never the rung a later one is compared against.
     var widens: Bool {
         switch self {
-        case .unauth, .scale, .max: false
-        case .free, .starter: true
+        case .unauth, .trial, .scale, .max: false
+        case .starter: true
         }
     }
 

@@ -366,7 +366,7 @@ struct ClientTests {
         let stub = StubTransport(["1.1.1.1": .json(["ip": "1.1.1.1", "is_vpn": false])])
         let free = try await client(stub).lookup("1.1.1.1")
 
-        #expect(free.isHosting == nil, "the free plan does not include is_hosting")
+        #expect(free.isHosting == nil, "an answer without is_hosting leaves it nil")
         #expect((free.isHosting ?? false) == false)
 
         let served = StubTransport([

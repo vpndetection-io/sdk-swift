@@ -24,7 +24,8 @@ public struct LookupResult: Sendable, Hashable {
     public let isDcproxy: Bool?
     public let isMobproxy: Bool?
     /// Whether a public proxy, one anyone can connect through, listens on the
-    /// address or sends its traffic out from it. Every paid plan.
+    /// address or sends its traffic out from it. With any key, a free one
+    /// included.
     public let isPubproxy: Bool?
 
     public let vpn: VpnDetail?
@@ -37,10 +38,10 @@ public struct LookupResult: Sendable, Hashable {
     public let mobproxy: ProxyDetail?
     /// Detail for `isPubproxy`. Empty when it is false. Every paid plan.
     public let pubproxy: PubproxyDetail?
-    /// Where the address is. Every keyed answer carries it, free and paid.
+    /// Where the address is. Every answer carries it, with or without a key.
     public let location: Location?
-    /// The AS announcing the address. Every keyed answer carries it, free and
-    /// paid.
+    /// The AS announcing the address. Every answer carries it, with or without
+    /// a key.
     public let asn: Asn?
 }
 

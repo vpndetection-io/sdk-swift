@@ -18,8 +18,8 @@ struct LookupTests {
         "no tier secret is set, so there is no ladder to compare",
     )
 
-    @Test("an unauthenticated lookup answers ip and is_vpn")
-    func unauthenticatedAnswersTheFreeShape() async throws {
+    @Test("a lookup without a key answers ip and is_vpn at the least")
+    func keylessAnswersAtLeastTheRequiredMembers() async throws {
         let fixture = try await Answers.shared.fixture(for: .unauth)
 
         #expect(fixture.result.ip == probe)
@@ -126,10 +126,29 @@ struct LookupTests {
         await #expect(refusing.facts.isEmpty)
     }
 
-    @Test("a batch collapses duplicates and keeps bogons off the wire")
-    func batchDedupesAndSkipsBogons() async throws {
+    @Test("a batch without a key is refused as unauthorized, once, and its bogon still answered")
+    func keylessBatchIsRefused() async throws {
         let transport = RecordingTransport(key: "")
         let client = clientFor(.unauth, transport: transport)
+
+        let results = try await client.lookupBatch([probe, "10.0.0.1"])
+
+        #expect(try results["10.0.0.1"]?.get().isBogon == true)
+        guard case .failure(let error) = try #require(results[probe]) else {
+            Issue.record("a batch without a key must fail")
+            return
+        }
+        #expect(error.kind == .unauthorized)
+        #expect(error.status == 401)
+        #expect(!error.isRetryable)
+        #expect(await transport.facts.map(\.path) == ["/batch"], "one request, never retried")
+    }
+
+    // A batch needs a key, and the free one is the cheapest that has it.
+    @Test("a batch collapses duplicates and keeps bogons off the wire", Tier.free.needsKey)
+    func batchDedupesAndSkipsBogons() async throws {
+        let transport = RecordingTransport(key: Tier.free.key)
+        let client = clientFor(.free, transport: transport)
 
         let results = try await client.lookupBatch([probe, "8.8.8.8", probe, "10.0.0.1", "8.8.8.8"])
 
@@ -139,6 +158,7 @@ struct LookupTests {
         // cannot read as a failure to deduplicate.
         let asked = Set(await transport.facts.map(\.path))
         #expect(asked == ["/batch"])
+        #expect(await transport.facts.allSatisfy(\.carriedKey), "the free key never reached the wire")
         #expect(try results["10.0.0.1"]?.get().isBogon == true)
         for ip in [probe, "8.8.8.8"] {
             assertShape(try #require(results[ip]).get())

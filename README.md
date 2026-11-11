@@ -30,7 +30,7 @@ Requires Swift 6.1 or newer, and macOS 13, iOS 16, tvOS 16, watchOS 9 or visionO
 
 ## Usage
 
-**No API key needed to start.** Without a key, a lookup answers `ip` and `is_vpn`, up to 1000 a day per source address.
+**No API key needed to start.** Without a key a lookup answers `ip`, `is_vpn`, Tor and relay detection, `location` and `asn`, with no daily or monthly cap: up to 60 lookups a minute from each address.
 
 ```swift
 import VPNDetection
@@ -38,22 +38,22 @@ import VPNDetection
 let client = VPNDetectionClient()
 
 let result = try await client.lookup("45.83.91.1")
-print(result.isVpn)   // true
+print(result.isVpn)                 // true
+print(result.location?.country)     // the ISO 3166 country code
+print(result.asn?.name)             // who runs the announcing network
 ```
 
 ### With an API key
 
-A free key adds Tor and relay detection, where the address is and the AS that announces it. Every paid plan answers every field, the same on each, and the plans differ only in how many lookups they include. Create a key in the [console](https://app.vpndetection.io), then pass it in:
+A free key adds every other flag, `is_hosting`, `is_cdn` and the four proxy flags, at 50,000 lookups a month, and every paid plan answers every field, the provider, confidence and last-seen detail behind each flag included. The paid plans differ only in how many lookups they include. Batch lookups need a key. Create one in the [console](https://app.vpndetection.io), then pass it in:
 
 ```swift
 let client = VPNDetectionClient(apiKey: ProcessInfo.processInfo.environment["VPNDETECTION_API_KEY"]!)
 
 let result = try await client.lookup("45.83.91.1")
 print(result.isVpn)                 // true
-print(result.location?.country)     // the ISO 3166 country code
-print(result.asn?.name)             // who runs the announcing network
+print(result.isHosting)             // Optional(true), with any key, a free one included
 print(result.vpn?.provider)         // Optional("nordvpn"), on a paid plan
-print(result.isHosting)             // Optional(true), on a paid plan
 ```
 
 Every setting has a default, and `VPNDetectionClient.Options` is where you change one:
@@ -84,7 +84,7 @@ Usage counts against the anniversary of your subscription, not the calendar mont
 
 ### Batch lookup
 
-Look up many addresses at once. Bogons and cached answers are handled locally, and everything else goes to the batch endpoint in chunks of up to 1000 addresses, in parallel:
+Look up many addresses at once. Bogons and cached answers are handled locally, and everything else goes to the batch endpoint in chunks of up to 1000 addresses, in parallel. The batch endpoint needs an API key, a free one included:
 
 ```swift
 let results = try await client.lookupBatch(["45.83.91.1", "8.8.8.8", "1.1.1.1"])
@@ -167,7 +167,7 @@ do {
 
 `kind` is one of `badRequest`, `unauthorized`, `forbidden`, `rateLimited`, `quotaExceeded`, `serverError` or `network`.
 
-Note that `rateLimited` and `quotaExceeded` both arrive as HTTP 429 and are not the same thing. A rate limit is when the API faces extreme traffic bursts and so retrying later works; but a spent quota needs your allowance raised or the window to roll over. The library retries rate limits for you, but not if your quota is exceeded.
+Note that `rateLimited` and `quotaExceeded` both arrive as HTTP 429 and are not the same thing. A rate limit is when the API faces extreme traffic bursts, or a lookup without a key passes 60 a minute, and so retrying later works; but a spent quota needs your allowance raised or the window to roll over. The library retries rate limits for you, but not if your quota is exceeded.
 
 Each attempt is abandoned after 30 seconds by default (`timeout` on the options), which fails as a retryable `network` error. One call can set its own, longer or shorter - `lookup`, `myIP`, `myEntitlement`, a batch, every `oauth` method, and from 4.3.0 every `client.database` call but the transfers:
 
@@ -273,11 +273,12 @@ Each redirect URI must be https on a public host name, or http on a loopback add
 
 ### Absent is not false
 
-Without a key only `ip` and `isVpn` come back, and a free key adds Tor, relay, `location` and `asn`. The rest are `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
+Without a key a lookup leaves out `isHosting`, `isCdn` and the four proxy flags, and a free key leaves out `vpn` and the detail behind each flag. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
 
 ```swift
 result.isHosting ?? false   // when you only want the flag
-result.isHosting == nil     // when "not in my plan" has to be told apart
+result.isHosting == nil     // without a key: not in your plan
+result.vpn == nil           // on a free key: not in your plan
 ```
 
 ### Supplying your own transport

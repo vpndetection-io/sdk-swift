@@ -135,7 +135,8 @@ struct LookupTests {
         let transport = RecordingTransport(key: "")
         let client = clientFor(.unauth, transport: transport)
 
-        let results = try await client.lookupBatch([probe, "10.0.0.1"])
+        // Two addresses on the wire: a keyless batch of one is answered as its lookup.
+        let results = try await client.lookupBatch([probe, "8.8.8.8", "10.0.0.1"])
 
         #expect(try results["10.0.0.1"]?.get().isBogon == true)
         guard case .failure(let error) = try #require(results[probe]) else {

@@ -2,6 +2,17 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.14.0 - 2026-11-14
+
+### Features
+
+- Re-pin the spec to 2026.11.14: is_bogon on every answer, and provider_name beside each provider ([`18f09eb`](https://github.com/vpndetection-io/sdk-swift/commit/18f09ebf092ceefe17766ed0fc638ba146e28dd9))
+
+### Fixes
+
+- Re-pin the spec to 2026.11.12: plainer words on the 401 and the batch rate limit ([`c0fc0ac`](https://github.com/vpndetection-io/sdk-swift/commit/c0fc0ac7d8debc5423b3d30427a9b09405477db1))
+- Say that a batch request of one address is answered as its lookup ([`59a53bc`](https://github.com/vpndetection-io/sdk-swift/commit/59a53bc6e937db3858b00429fd4a7f35cb3ff2ca))
+
 ## 4.13.1 - 2026-11-11
 
 ### Fixes

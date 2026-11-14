@@ -32,6 +32,25 @@ struct BatchEntryTests {
         }
     }
 
+    @Test("a served is_bogon and provider_name reach the result")
+    func aServedIsBogonReachesTheResult() async throws {
+        let stub = Self.serving(["results": [
+            "45.83.91.1": ["ip": "45.83.91.1", "is_bogon": true, "is_vpn": false],
+            "45.83.91.2": [
+                "ip": "45.83.91.2", "is_bogon": false, "is_vpn": true,
+                "vpn": ["provider": "nordvpn", "provider_name": "NordVPN"],
+            ],
+        ], "errors": [:]])
+        let results = try await Self.client(stub).lookupBatch(["45.83.91.1", "45.83.91.2"])
+        guard case .success(let flagged) = results["45.83.91.1"], case .success(let named) = results["45.83.91.2"] else {
+            Issue.record("a served entry failed")
+            return
+        }
+        #expect(flagged.isBogon)
+        #expect(!named.isBogon)
+        #expect(named.vpn?.providerName == "NordVPN")
+    }
+
     @Test("an entry error it cannot read fails that address alone, sent once")
     func anUnreadableEntryErrorFailsThatAddressAlone() async throws {
         let entries: [(String, Any)] = [

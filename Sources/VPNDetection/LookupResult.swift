@@ -13,7 +13,9 @@ public struct LookupResult: Sendable, Hashable {
     public let ip: String
     /// Whether the address is VPN infrastructure. Every plan includes this.
     public let isVpn: Bool
-    /// Set when this answer was computed locally rather than served.
+    /// Whether the address is reserved space (private, loopback, documentation and
+    /// the like), which this package answers locally without a request. A served
+    /// answer carries the API's own `is_bogon`, and this reads it.
     public let isBogon: Bool
 
     public let isHosting: Bool?
@@ -63,9 +65,12 @@ public struct VpnDetail: Sendable, Hashable {
     /// Deprecated: no plan is answered with it since 2026-10-20, so it is always
     /// `nil`; read `confidence` instead. It goes in the next major.
     public let method: String?
+    /// The name the provider catalog gives `provider`, the ID to key on; an empty
+    /// string where the catalog names none.
+    public let providerName: String?
 
     public var isEmpty: Bool {
-        provider == nil && lastSeen == nil && confidence == nil && method == nil
+        provider == nil && lastSeen == nil && confidence == nil && method == nil && providerName == nil
     }
 }
 
@@ -77,9 +82,12 @@ public struct ClassDetail: Sendable, Hashable {
     public let confidence: String?
     /// The most recent date this address was observed, as `YYYY-MM-DD`.
     public let lastSeen: String?
+    /// The name the provider catalog gives `provider`, the ID to key on; an empty
+    /// string where the catalog names none.
+    public let providerName: String?
 
     public var isEmpty: Bool {
-        provider == nil && confidence == nil && lastSeen == nil
+        provider == nil && confidence == nil && lastSeen == nil && providerName == nil
     }
 }
 
@@ -99,10 +107,13 @@ public struct ProxyDetail: Sendable, Hashable {
     public let hitsDaysPct: Int?
     /// How many distinct proxy networks this address was seen in.
     public let providersNum: Int?
+    /// The name the provider catalog gives `provider`, the ID to key on; an empty
+    /// string where the catalog names none.
+    public let providerName: String?
 
     public var isEmpty: Bool {
         provider == nil && firstSeen == nil && lastSeen == nil
-            && hits == nil && hitsDaysPct == nil && providersNum == nil
+            && hits == nil && hitsDaysPct == nil && providersNum == nil && providerName == nil
     }
 }
 
@@ -180,7 +191,7 @@ extension LookupResult {
     init(_ body: Components.Schemas.LookupResponse) throws {
         self.ip = body.ip
         self.isVpn = body.isVpn
-        self.isBogon = false
+        self.isBogon = body.isBogon ?? false
         self.isHosting = body.isHosting
         self.isRelay = body.isRelay
         self.isTor = body.isTor
@@ -210,6 +221,7 @@ extension VpnDetail {
         self.lastSeen = try fullDate(detail.lastSeen, "vpn.last_seen")
         self.confidence = detail.confidence
         self.method = detail.method
+        self.providerName = detail.providerName
     }
 }
 
@@ -218,6 +230,7 @@ extension ClassDetail {
         self.provider = detail.provider
         self.confidence = detail.confidence
         self.lastSeen = try fullDate(detail.lastSeen, "last_seen")
+        self.providerName = detail.providerName
     }
 }
 
@@ -229,6 +242,7 @@ extension ProxyDetail {
         self.hits = detail.hits
         self.hitsDaysPct = detail.hitsDaysPct
         self.providersNum = detail.providersNum
+        self.providerName = detail.providerName
     }
 }
 

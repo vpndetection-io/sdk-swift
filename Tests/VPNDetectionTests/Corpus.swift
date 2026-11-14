@@ -197,6 +197,7 @@ extension VpnDetail {
         lastSeen.map { fields["last_seen"] = .string($0) }
         confidence.map { fields["confidence"] = .string($0) }
         method.map { fields["method"] = .string($0) }
+        providerName.map { fields["provider_name"] = .string($0) }
         return fields
     }
 }
@@ -207,6 +208,7 @@ extension ClassDetail {
         provider.map { fields["provider"] = .string($0) }
         confidence.map { fields["confidence"] = .string($0) }
         lastSeen.map { fields["last_seen"] = .string($0) }
+        providerName.map { fields["provider_name"] = .string($0) }
         return fields
     }
 }
@@ -220,6 +222,7 @@ extension ProxyDetail {
         hits.map { fields["hits"] = .int($0) }
         hitsDaysPct.map { fields["hits_days_pct"] = .int($0) }
         providersNum.map { fields["providers_num"] = .int($0) }
+        providerName.map { fields["provider_name"] = .string($0) }
         return fields
     }
 }

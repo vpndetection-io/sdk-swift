@@ -43,15 +43,14 @@ extension LookupResult {
     /// plan: every flag present and false, every detail object present and empty,
     /// and a location and AS of empty strings and AS 0.
     ///
-    /// `isBogon` is set so a caller can always tell a locally computed answer
-    /// from a served one. Note this is deliberately the WIDEST shape regardless
+    /// `isBogon` is true, as the API answers reserved space. Note this is deliberately the WIDEST shape regardless
     /// of your plan, so do not infer which fields your plan includes from it.
     static func bogon(_ ip: String) -> LookupResult {
-        let vpn = VpnDetail(provider: nil, lastSeen: nil, confidence: nil, method: nil)
-        let classDetail = ClassDetail(provider: nil, confidence: nil, lastSeen: nil)
+        let vpn = VpnDetail(provider: nil, lastSeen: nil, confidence: nil, method: nil, providerName: nil)
+        let classDetail = ClassDetail(provider: nil, confidence: nil, lastSeen: nil, providerName: nil)
         let proxy = ProxyDetail(
             provider: nil, firstSeen: nil, lastSeen: nil,
-            hits: nil, hitsDaysPct: nil, providersNum: nil,
+            hits: nil, hitsDaysPct: nil, providersNum: nil, providerName: nil,
         )
         let pubproxy = PubproxyDetail(
             entry: nil, exit: nil, protocols: nil, numPorts: nil, numProxies: nil, lastSeen: nil,

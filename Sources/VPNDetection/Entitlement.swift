@@ -26,8 +26,14 @@ public struct Entitlement: Sendable, Hashable {
 
     /// The plan behind the key, and the field tier it buys.
     public struct Plan: Sendable, Hashable {
-        /// The plan the organization is on, e.g. `max`.
+        /// The plan the organization is on, as an identifier that is never
+        /// renamed or reused: `free` for the free plan, or a paid plan's key,
+        /// e.g. `max`. Compare against it, and show `name`.
         public let key: String
+        /// The plan's name, as the site and console show it: `Unlimited` for
+        /// the free plan. Show this rather than a name built from `key`: a
+        /// plan's name can change, and its key never does.
+        public let name: String
         /// The field tier, which decides how much of a lookup answer comes back.
         public let tier: Tier
 
@@ -50,9 +56,11 @@ public struct Entitlement: Sendable, Hashable {
         public let requests: Int64
         /// What the plan includes. Zero on a plan that includes none.
         public let quota: Int64
-        /// Where we stop serving. `nil` means NEVER, which is the normal state
-        /// of an uncapped paid plan and is not the same as zero. Above the
-        /// quota and below this, requests are served and billed as overage.
+        /// Where full answers stop: past it, a paid key is answered with
+        /// Unlimited's fields and `capReached` true, uncharged, until the window
+        /// ends or the cap is raised. `nil` means NEVER, which is the normal
+        /// state of an uncapped paid plan and is not the same as zero. Above
+        /// the quota and below this, requests are served and billed as overage.
         public let hardLimit: Int64?
         /// When the current allowance period began.
         public let windowStart: Date
@@ -81,6 +89,7 @@ extension Entitlement.Apikey {
 extension Entitlement.Plan {
     init(_ wire: Components.Schemas.EntitlementPlan) {
         self.key = wire.key
+        self.name = wire.name
         self.tier = Tier(wire.tier)
     }
 }

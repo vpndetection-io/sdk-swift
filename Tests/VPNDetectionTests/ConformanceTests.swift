@@ -261,6 +261,24 @@ struct ConformanceTests {
         #expect(bogonRangesV6.count == Bogons.v6.count)
     }
 
+    // The plan's key is what a client compares and its name what it shows: the
+    // free plan's key is `free` and its name `Unlimited`. The corpus's other
+    // vocabulary cases serve values outside a closed list, which this SDK's
+    // enums still refuse.
+    @Test("myEntitlement reads the plan's name")
+    func myEntitlementReadsThePlanName() async throws {
+        let testCase = corpus.vocabularyCase("entitlement-plan-name")
+        let stub = StubTransport([
+            "/api/v1/entitlement": .init(status: 200, body: testCase.answer.encoded),
+        ])
+
+        let ent = try await testClient(stub).myEntitlement()
+
+        #expect(JSONValue.string(ent.plan.key) == testCase.expect["plan.key"])
+        #expect(JSONValue.string(ent.plan.name) == testCase.expect["plan.name"])
+        #expect(JSONValue.string(ent.plan.tier.rawValue) == testCase.expect["plan.tier"])
+    }
+
     @Test("every wire name the corpus asserts is a key of the served response")
     func corpusWireNamesAreRealKeys() {
         var names = Set(corpus.bogonResponse.flagsFalse + corpus.bogonResponse.emptyObjects)

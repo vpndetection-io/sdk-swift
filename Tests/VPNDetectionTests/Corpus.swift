@@ -18,6 +18,20 @@ struct Corpus: Decodable, Sendable {
     let bogons: BogonTable
     /// Read loosely, because its cases tell `null` apart from absent.
     let oauth: JSONValue
+    let vocabulary: Vocabulary
+
+    /// Values the API may add to a closed list, and the plan's name. Each
+    /// `expect` key is a wire path through the answer.
+    struct Vocabulary: Decodable, Sendable {
+        let cases: [Case]
+
+        struct Case: Decodable, Sendable {
+            let name: String
+            let call: String
+            let answer: JSONValue
+            let expect: [String: JSONValue]
+        }
+    }
 
     struct BogonCase: Decodable, Sendable {
         let ip: String
@@ -115,6 +129,13 @@ extension Corpus {
         return corpus
     }()
 
+    func vocabularyCase(_ name: String) -> Vocabulary.Case {
+        guard let found = vocabulary.cases.first(where: { $0.name == name }) else {
+            fatalError("the corpus has no vocabulary case named \(name)")
+        }
+        return found
+    }
+
     func batchCase(_ name: String) -> BatchCase {
         guard let found = batch.first(where: { $0.name == name }) else {
             fatalError("the corpus has no batch case named \(name)")
@@ -169,6 +190,7 @@ enum Wire {
         "is_mobproxy": { $0.isMobproxy },
         "is_pubproxy": { $0.isPubproxy },
         "trial_expired": { $0.trialExpired },
+        "cap_reached": { $0.capReached },
     ]
 
     static let details: [String: @Sendable (LookupResult) -> [String: JSONValue]?] = [

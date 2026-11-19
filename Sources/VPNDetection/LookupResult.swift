@@ -48,6 +48,12 @@ public struct LookupResult: Sendable, Hashable {
     /// daily trial lasts (every field for the first 100 lookups each UTC day),
     /// `true` once the answer has Unlimited's.
     public let trialExpired: Bool?
+    /// On every answer to a key on a paid plan, and on no other: `false` while
+    /// the answer has every field, `true` once its organization's overage cap
+    /// is reached and the answer has Unlimited's. Lookups answered past the cap
+    /// are not billed; raising or removing the cap in Billing turns it `false`
+    /// again.
+    public let capReached: Bool?
 }
 
 /// What is known about the VPN attribution.
@@ -212,6 +218,7 @@ extension LookupResult {
         self.location = body.location.map(Location.init)
         self.asn = body.asn.map(Asn.init)
         self.trialExpired = body.trialExpired
+        self.capReached = body.capReached
     }
 }
 
@@ -282,7 +289,7 @@ extension Location {
 
 extension Asn {
     init(_ wire: Components.Schemas.Asn) {
-        self.asn = wire.asn
+        self.asn = Int(wire.asn)
         self.name = wire.name
         self.domain = wire.domain
         self.type = wire._type

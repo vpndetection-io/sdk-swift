@@ -75,12 +75,15 @@ Same answer `lookup` would give for that address, and the same cost against your
 
 ```swift
 let acct = try await client.myEntitlement()
-print(acct.plan.key)          // max
+print(acct.plan.name)         // Max, what to show
+print(acct.plan.key)          // max, what to compare against
 print(acct.usage.requests)    // 580
 print(acct.usage.windowEnd)   // when the allowance resets
 ```
 
 Usage counts against the anniversary of your subscription on a paid plan, not the calendar month and not the billing period, and against the UTC day on the free plan; it is the same number a lookup is gated on. `hardLimit` is `nil` on an uncapped plan, which is not the same as zero.
+
+Show `plan.name` and compare against `plan.key`: a plan's name can change, and its key never does.
 
 ### Batch lookup
 
@@ -273,12 +276,13 @@ Each redirect URI must be https on a public host name, or http on a loopback add
 
 ### Absent is not false
 
-Unlimited leaves out `isHosting`, `isCdn` and the four proxy flags, and of the detail behind each flag it answers only Tor's and relay's; a free-plan key's answer carries `trialExpired`, true once its daily trial is spent. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
+Unlimited leaves out `isHosting`, `isCdn` and the four proxy flags, and of the detail behind each flag it answers only Tor's and relay's; a free-plan key's answer carries `trialExpired`, true once its daily trial is spent, and a paid key's carries `capReached`, true once its organization's overage cap is reached and the answer has Unlimited's. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
 
 ```swift
 result.isHosting ?? false   // when you only want the flag
 result.isHosting == nil     // on Unlimited: not in your plan
 result.trialExpired == true // a free-plan key's daily trial is spent
+result.capReached == true   // a paid key past its overage cap
 ```
 
 ### Supplying your own transport

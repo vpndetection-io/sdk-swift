@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 5.0.1 - 2026-11-19
+
+### Fixes
+
+- Cache a spent trial's or a reached cap's answer for a minute at most ([`cbde23f`](https://github.com/vpndetection-io/sdk-swift/commit/cbde23f250c62c4c851a89eda9bb80435741ed50))
+
 ## 5.0.0 - 2026-11-19
 
 ### Breaking changes

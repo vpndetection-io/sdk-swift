@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 4.15.0 - 2026-11-19
+
+### Features
+
+- Read cap_reached and the plan's name, and re-pin the spec to 2026.11.18 ([`b65b1cd`](https://github.com/vpndetection-io/sdk-swift/commit/b65b1cde410128ea79b2132edb983b2187671f35))
+
 ## 4.14.0 - 2026-11-14
 
 ### Features

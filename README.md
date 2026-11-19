@@ -13,7 +13,7 @@ Add the package to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "4.15.0"),
+    .package(url: "https://github.com/vpndetection-io/sdk-swift.git", from: "5.0.0"),
 ]
 ```
 
@@ -284,6 +284,19 @@ result.isHosting == nil     // on Unlimited: not in your plan
 result.trialExpired == true // a free-plan key's daily trial is spent
 result.capReached == true   // a paid key past its overage cap
 ```
+
+### A value the API adds
+
+A plan's tier, a database's standing and license type, a format and a download's outcome are each a struct with a constant per value this release knows. From 5.0.0, a value the API adds later reads as itself rather than failing the call, so compare with `==` and keep a `default:` in a `switch`:
+
+```swift
+if database.standing == .licensed { /* download it */ }
+database.standing.rawValue  // "licensed", as the API spells it
+database.standing.isKnown   // false for a value added after this release
+Database.Standing.known     // every value this release knows
+```
+
+A format you pass in must be one of `DatabaseFormat.known`; any other is a `badRequest` before a request is made.
 
 ### Supplying your own transport
 

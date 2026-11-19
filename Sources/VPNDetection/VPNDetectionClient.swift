@@ -244,7 +244,7 @@ public struct VPNDetectionClient: Sendable {
                         kind: .serverError, message: "unexpected response: \(output)",
                     )
                 }
-                return Entitlement(try ok.body.json)
+                return try Entitlement(ok.body.json)
             }
         }
     }

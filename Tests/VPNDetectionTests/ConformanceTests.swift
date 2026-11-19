@@ -261,22 +261,157 @@ struct ConformanceTests {
         #expect(bogonRangesV6.count == Bogons.v6.count)
     }
 
-    // The plan's key is what a client compares and its name what it shows: the
-    // free plan's key is `free` and its name `Unlimited`. The corpus's other
-    // vocabulary cases serve values outside a closed list, which this SDK's
-    // enums still refuse.
-    @Test("myEntitlement reads the plan's name")
-    func myEntitlementReadsThePlanName() async throws {
-        let testCase = corpus.vocabularyCase("entitlement-plan-name")
-        let stub = StubTransport([
-            "/api/v1/entitlement": .init(status: 200, body: testCase.answer.encoded),
+    // Each vocabulary case serves a value no published list holds, or the plan's
+    // name, and reads it back through the typed result by its wire path. A path
+    // the result does not surface reads as absent, so a case the corpus adds stays
+    // red until this SDK reads it.
+    @Test("every vocabulary case reads as served", arguments: Corpus.shared.vocabulary.cases.map(\.name))
+    func vocabularyReadsAsServed(_ name: String) async throws {
+        let testCase = corpus.vocabularyCase(name)
+        let paths = [
+            "myEntitlement": "/api/v1/entitlement",
+            "listDatabases": "/api/v1/database/list",
+            "listDownloads": "/api/v1/database/downloads",
+        ]
+        let path = try #require(paths[testCase.call], "\(name): no call \(testCase.call)")
+        let stub = StubTransport([path: .init(status: 200, body: testCase.answer.encoded)])
+        let client = testClient(stub, retries: 0)
+
+        let read: JSONValue =
+            switch testCase.call {
+            case "myEntitlement": try await Self.tree(client.myEntitlement())
+            case "listDatabases": try await Self.tree(client.database.list())
+            default: try await Self.tree(client.database.downloads())
+            }
+
+        #expect(!testCase.expect.isEmpty, "\(name) asserts nothing")
+        for (key, want) in testCase.expect {
+            #expect(read.at(key) == want, "\(name): \(key)")
+        }
+    }
+
+    // A wrong type, an empty value or a null where the member is required is
+    // still an answer the call cannot read; only a null license type, no license
+    // at all, reads.
+    @Test(
+        "a vocabulary member of the wrong type is refused",
+        arguments: [
+            ("entitlement-tier-unknown", "plan.tier"),
+            ("database-standing-unknown", "databases.0.standing"),
+            ("database-license-type-unknown", "databases.0.license_type"),
+            ("database-format-unknown", "databases.0.versions.0.formats.0.format"),
+            ("database-format-unknown", "databases.0.versions.0.sample_formats.0"),
+            ("download-outcome-unknown", "downloads.0.outcome"),
+        ],
+    )
+    func vocabularyWrongTypeIsRefused(_ name: String, _ member: String) async throws {
+        let testCase = corpus.vocabularyCase(name)
+        let paths = [
+            "myEntitlement": "/api/v1/entitlement",
+            "listDatabases": "/api/v1/database/list",
+            "listDownloads": "/api/v1/database/downloads",
+        ]
+        let path = try #require(paths[testCase.call])
+        let nullable = member.hasSuffix("license_type")
+        for served: JSONValue in [.int(1), .string(""), .bool(true), .object([:]), .null] {
+            let body = testCase.answer.setting(member, to: served).encoded
+            let stub = StubTransport([path: .init(status: 200, body: body)])
+            let client = testClient(stub, retries: 0)
+            do {
+                let read: JSONValue =
+                    switch testCase.call {
+                    case "myEntitlement": try await Self.tree(client.myEntitlement())
+                    case "listDatabases": try await Self.tree(client.database.list())
+                    default: try await Self.tree(client.database.downloads())
+                    }
+                #expect(served == .null && nullable, "\(name): \(member) as \(served) was read")
+                #expect(read.at(member) == .null, "\(name): \(member)")
+            } catch let error as VPNDetectionError {
+                #expect(!(served == .null && nullable), "\(name): a null \(member) was refused")
+                #expect(error.kind == .serverError, "\(name): \(member) as \(served)")
+            }
+        }
+    }
+
+    @Test("a value outside a list compares by what was served")
+    func vocabularyComparesByValue() {
+        #expect(Database.Standing(rawValue: "licensed") == .licensed)
+        #expect(Database.Standing.licensed.isKnown)
+        #expect(!Database.Standing(rawValue: "suspended").isKnown)
+        #expect(Database.Standing(rawValue: "suspended") == Database.Standing(rawValue: "suspended"))
+        #expect(Database.Standing(rawValue: "suspended") != .licensed)
+        #expect(Entitlement.Plan.Tier.known.map(\.rawValue) == ["free", "starter", "scale", "max"])
+        #expect("\(Download.Outcome(rawValue: "throttled"))" == "throttled")
+    }
+
+    @Test("a format outside the published list is refused before the network")
+    func unpublishedFormatIsRefused() async {
+        let stub = StubTransport()
+        let client = testClient(stub)
+        let parquet = DatabaseFormat(rawValue: "parquet")
+        let calls: [(String, () async throws -> Void)] = [
+            ("checksums", { _ = try await client.database.checksums(id: "vpn_ip_v1", format: parquet) }),
+            ("downloadURL", { _ = try await client.database.downloadURL(id: "vpn_ip_v1", format: parquet) }),
+            ("downloadBytes", { _ = try await client.database.downloadBytes("vpn_ip_v1", format: parquet) }),
+        ]
+        for (name, call) in calls {
+            do {
+                try await call()
+                Issue.record("\(name) sent a format no list holds")
+            } catch let error as VPNDetectionError {
+                #expect(error.kind == .badRequest, "\(name)")
+            } catch {
+                Issue.record("\(name): \(error)")
+            }
+        }
+        #expect(await stub.callCount == 0)
+    }
+
+    // Each typed result as the wire paths the vocabulary cases name.
+    static func tree(_ ent: Entitlement) -> JSONValue {
+        .object([
+            "plan": .object([
+                "key": .string(ent.plan.key),
+                "name": .string(ent.plan.name),
+                "tier": .string(ent.plan.tier.rawValue),
+            ]),
         ])
+    }
 
-        let ent = try await testClient(stub).myEntitlement()
+    static func tree(_ databases: [Database]) -> JSONValue {
+        .object([
+            "databases": .array(databases.map { database in
+                .object([
+                    "base": .string(database.base),
+                    "standing": .string(database.standing.rawValue),
+                    "license_type": database.licenseType.map { .string($0.rawValue) } ?? .null,
+                    "versions": .array(database.versions.map { version in
+                        .object([
+                            "id": .string(version.id),
+                            "formats": .array(version.formats.map { size in
+                                .object([
+                                    "format": .string(size.format.rawValue),
+                                    "bytes": size.bytes.map { .int(Int($0)) } ?? .null,
+                                ])
+                            }),
+                            "sample_formats": .array(version.sampleFormats.map { .string($0.rawValue) }),
+                        ])
+                    }),
+                ])
+            }),
+        ])
+    }
 
-        #expect(JSONValue.string(ent.plan.key) == testCase.expect["plan.key"])
-        #expect(JSONValue.string(ent.plan.name) == testCase.expect["plan.name"])
-        #expect(JSONValue.string(ent.plan.tier.rawValue) == testCase.expect["plan.tier"])
+    static func tree(_ downloads: [Download]) -> JSONValue {
+        .object([
+            "downloads": .array(downloads.map { download in
+                .object([
+                    "dataset_id": .string(download.datasetId),
+                    "format": .string(download.format),
+                    "outcome": .string(download.outcome.rawValue),
+                ])
+            }),
+        ])
     }
 
     @Test("every wire name the corpus asserts is a key of the served response")

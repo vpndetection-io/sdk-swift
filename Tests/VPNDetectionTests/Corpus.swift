@@ -166,6 +166,46 @@ extension JSONValue {
         return members
     }
 
+    /// The value at a dotted wire path, a number indexing a list, or nil.
+    func at(_ path: String) -> JSONValue? {
+        var node: JSONValue? = self
+        for step in path.split(separator: ".") {
+            switch node {
+            case .object(let members): node = members[String(step)]
+            case .array(let items):
+                guard let index = Int(step), items.indices.contains(index) else {
+                    return nil
+                }
+                node = items[index]
+            default: return nil
+            }
+        }
+        return node
+    }
+
+    /// A copy with the value at a dotted wire path replaced.
+    func setting(_ path: String, to value: JSONValue) -> JSONValue {
+        var steps = path.split(separator: ".").map(String.init)
+        guard !steps.isEmpty else {
+            return value
+        }
+        let step = steps.removeFirst()
+        let rest = steps.joined(separator: ".")
+        switch self {
+        case .object(var members):
+            members[step] = (members[step] ?? .null).setting(rest, to: value)
+            return .object(members)
+        case .array(var items):
+            guard let index = Int(step), items.indices.contains(index) else {
+                return self
+            }
+            items[index] = items[index].setting(rest, to: value)
+            return .array(items)
+        default:
+            return self
+        }
+    }
+
     /// The fixture body as the bytes a server would have sent.
     var encoded: Data {
         guard let data = try? JSONEncoder().encode(self) else {

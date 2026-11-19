@@ -3,3 +3,10 @@ generate:
   - client
 accessModifier: internal
 namingStrategy: idiomatic
+typeOverrides:
+  schemas:
+    DatabaseFormat: Swift.String
+    Standing: Swift.String
+    EntitlementPlan: WireEntitlementPlan
+    Database: WireDatabase
+    Download: WireDownload

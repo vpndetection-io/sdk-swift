@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 5.0.0 - 2026-11-19
+
+### Breaking changes
+
+- Hand back a tier, standing, license type, format or outcome the API adds ([`6215ced`](https://github.com/vpndetection-io/sdk-swift/commit/6215cedfbf2b5e31a15ffb248024e1f6ea11783d))
+
 ## 4.15.0 - 2026-11-19
 
 ### Features

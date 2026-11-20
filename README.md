@@ -81,7 +81,7 @@ print(acct.usage.requests)    // 580
 print(acct.usage.windowEnd)   // when the allowance resets
 ```
 
-Usage counts against the anniversary of your subscription on a paid plan, not the calendar month and not the billing period, and against the UTC day on the free plan; it is the same number a lookup is gated on. `hardLimit` is `nil` on an uncapped plan, which is not the same as zero.
+Usage counts against the anniversary of your subscription on a paid plan, not the calendar month and not the billing period, and against the trial on the free plan; it is the same number a lookup is gated on. `hardLimit` is `nil` on an uncapped plan, which is not the same as zero.
 
 Show `plan.name` and compare against `plan.key`: a plan's name can change, and its key never does.
 

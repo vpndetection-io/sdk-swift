@@ -6,8 +6,12 @@
 /// you only care whether the address is flagged, and compare against `nil` when
 /// the difference matters.
 ///
-/// A detail object that is present but empty means the flag above it is false.
-/// A populated one always carries every one of its keys.
+/// The same holds inside a shared object: `location?.city` is `nil` on Unlimited,
+/// the free plan.
+///
+/// A detail object that is present but empty means the flag above it is false,
+/// and `web` is an empty list when `isWeb` is. A populated one always carries
+/// every one of its keys.
 public struct LookupResult: Sendable, Hashable {
     /// The address that was looked up, normalized.
     public let ip: String
@@ -28,6 +32,27 @@ public struct LookupResult: Sendable, Hashable {
     /// Whether a public proxy, one anyone can connect through, listens on the
     /// address or sends its traffic out from it. On every paid plan.
     public let isPubproxy: Bool?
+    /// Whether the address is announced from many places at once, as a public
+    /// DNS resolver's or a CDN's edge is. Every answer carries it, with or
+    /// without a key.
+    public let isAnycast: Bool?
+    /// Whether the address is a mobile carrier's, where many phones can share
+    /// one address. On every paid plan.
+    public let isCarrier: Bool?
+    /// Whether the address is a satellite operator's. On every paid plan.
+    public let isSatellite: Bool?
+    /// Whether an SSH server answered on the address. On every paid plan.
+    public let isSsh: Bool?
+    /// Whether a mail server answered on the address. On every paid plan.
+    public let isSmtp: Bool?
+    /// Whether a web server answered on the address, on port 80 or 443. On
+    /// every paid plan.
+    public let isWeb: Bool?
+    /// Whether an open DNS resolver answered on the address. On every paid plan.
+    public let isDnsResolver: Bool?
+    /// Whether a BitTorrent client was seen on the address in the last 90 days.
+    /// On every paid plan.
+    public let isBittorrent: Bool?
 
     public let vpn: VpnDetail?
     public let hosting: ClassDetail?
@@ -39,14 +64,36 @@ public struct LookupResult: Sendable, Hashable {
     public let mobproxy: ProxyDetail?
     /// Detail for `isPubproxy`. Empty when it is false. Every paid plan.
     public let pubproxy: PubproxyDetail?
-    /// Where the address is. Every answer carries it, with or without a key.
+    /// Detail for `isCarrier`. Empty when it is false. Every paid plan.
+    public let carrier: CarrierDetail?
+    /// Detail for `isSatellite`. Empty when it is false. Every paid plan.
+    public let satellite: SatelliteDetail?
+    /// Detail for `isSsh`. Empty when it is false. Every paid plan.
+    public let ssh: SshDetail?
+    /// Detail for `isSmtp`. Empty when it is false. Every paid plan.
+    public let smtp: SmtpDetail?
+    /// Detail for `isWeb`: a row per port that answered, lowest first, and an
+    /// empty list when it is false. Every paid plan.
+    public let web: [WebDetail]?
+    /// Detail for `isDnsResolver`. Empty when it is false. Every paid plan.
+    public let dnsResolver: DnsResolverDetail?
+    /// Detail for `isBittorrent`. Empty when it is false. Every paid plan.
+    public let bittorrent: BitTorrentDetail?
+    /// Where the address is. Every answer carries it, with or without a key; its
+    /// finer members, from the region down, on every paid plan.
     public let location: Location?
     /// The AS announcing the address. Every answer carries it, with or without
     /// a key.
     public let asn: Asn?
+    /// Who uses the address. Every paid plan.
+    public let company: Company?
+    /// The name the address's reverse DNS (PTR) record points to, or an empty
+    /// string when it has none. Every answer carries it, with or without a key.
+    public let hostname: String?
+    /// Where to report abuse from the address. Every paid plan.
+    public let abuse: AbuseContact?
     /// On answers to a key on the free plan only: `false` while its organization's
-    /// daily trial lasts (every field for the first 100 lookups each UTC day),
-    /// `true` once the answer has Unlimited's.
+    /// trial of every field lasts, `true` once the answer has Unlimited's.
     public let trialExpired: Bool?
     /// On every answer to a key on a paid plan, and on no other: `false` while
     /// the answer has every field, `true` once its organization's overage cap
@@ -154,8 +201,172 @@ public struct PubproxyDetail: Sendable, Hashable {
     }
 }
 
-/// Where the address is, to the country. Every property is set whenever the
-/// object is, an empty string where it is not known.
+/// The mobile network whose address space this is.
+public struct CarrierDetail: Sendable, Hashable {
+    /// The mobile carrier.
+    public let name: String?
+    /// Its mobile country code.
+    public let mcc: String?
+    /// Its mobile network code.
+    public let mnc: String?
+    /// ISO 3166 country code.
+    public let country: String?
+    /// `high`, `medium` or `low`.
+    public let confidence: String?
+
+    public var isEmpty: Bool {
+        name == nil && mcc == nil && mnc == nil && country == nil && confidence == nil
+    }
+}
+
+/// The satellite operator whose address space this is.
+public struct SatelliteDetail: Sendable, Hashable {
+    /// The operator's ID in Satellite IP Provider.
+    public let provider: String?
+    /// The operator's name.
+    public let providerName: String?
+    /// The orbit: `leo`, `meo` or `geo`.
+    public let orbit: String?
+    /// Who the space serves, such as consumer or maritime.
+    public let segment: String?
+    /// ISO 3166 country code.
+    public let country: String?
+    /// The AS the operator announces it from.
+    public let asn: Int?
+    /// `high`, `medium` or `low`.
+    public let confidence: String?
+
+    public var isEmpty: Bool {
+        provider == nil && providerName == nil && orbit == nil && segment == nil && country == nil
+            && asn == nil && confidence == nil
+    }
+}
+
+/// The SSH server that answered on the address.
+public struct SshDetail: Sendable, Hashable {
+    /// The port the server answered on.
+    public let port: Int?
+    /// Its banner.
+    public let banner: String?
+    /// Its host key's fingerprint.
+    public let hostKeyFp: String?
+    /// A session was set up.
+    public let sessionOk: Bool?
+    /// The first day it answered.
+    public let firstSeen: String?
+    /// The last day it did.
+    public let lastSeen: String?
+
+    public var isEmpty: Bool {
+        port == nil && banner == nil && hostKeyFp == nil && sessionOk == nil && firstSeen == nil
+            && lastSeen == nil
+    }
+}
+
+/// The mail server that answered on the address.
+public struct SmtpDetail: Sendable, Hashable {
+    /// The port the server answered on.
+    public let port: Int?
+    /// Its banner.
+    public let banner: String?
+    /// A session was set up.
+    public let sessionOk: Bool?
+    /// The first day it answered.
+    public let firstSeen: String?
+    /// The last day it did.
+    public let lastSeen: String?
+
+    public var isEmpty: Bool {
+        port == nil && banner == nil && sessionOk == nil && firstSeen == nil && lastSeen == nil
+    }
+}
+
+/// One port of the address that answered as a web server.
+public struct WebDetail: Sendable, Hashable {
+    /// 80 or 443.
+    public let port: Int
+    /// A TLS handshake completed.
+    public let tlsOk: Bool
+    /// An HTTP response came back.
+    public let sessionOk: Bool
+    /// Its status, 0 where none came.
+    public let statusCode: Int
+    /// Its `Server` header.
+    public let server: String
+    /// Where it redirected.
+    public let location: String
+    /// The page's title.
+    public let title: String
+    /// The certificate's subject common name.
+    public let certSubjectCn: String
+    /// Its subject organization.
+    public let certSubjectO: String
+    /// Its issuer.
+    public let certIssuerDn: String
+    /// Browsers trust it.
+    public let certBrowserTrusted: Bool
+    /// The TLS version negotiated, empty without TLS.
+    public let tlsVersion: String
+    /// The first day the port was open.
+    public let firstSeen: String
+    /// The last day it was.
+    public let lastSeen: String
+}
+
+/// The open DNS resolver that answered on the address.
+public struct DnsResolverDetail: Sendable, Hashable {
+    /// The port it answered on.
+    public let port: Int?
+    /// It offered recursion.
+    public let recursionAvailable: Bool?
+    /// Its answer's response code.
+    public let rcode: Int?
+    /// Its answer was right.
+    public let answerCorrect: Bool?
+    /// The first day it answered.
+    public let firstSeen: String?
+    /// The last day it did.
+    public let lastSeen: String?
+
+    public var isEmpty: Bool {
+        port == nil && recursionAvailable == nil && rcode == nil && answerCorrect == nil
+            && firstSeen == nil && lastSeen == nil
+    }
+}
+
+/// The BitTorrent clients seen on the address over the last 90 days.
+public struct BitTorrentDetail: Sendable, Hashable {
+    /// A client here answered, or two or more reported it at once.
+    public let verified: Bool?
+    /// A client here derived its node ID from the address (BEP 42).
+    public let idMatchesIp: Bool?
+    /// The first day a client was seen here.
+    public let firstSeen: String?
+    /// The last day.
+    public let lastSeen: String?
+    /// The last day one answered, empty when none did.
+    public let lastReachable: String?
+    /// On how many days.
+    public let daysSeen: Int?
+    /// Distinct ports over the window.
+    public let numPorts: Int?
+    /// The most on one day.
+    public let peakNumPorts: Int?
+    /// A DHT indexer rather than people.
+    public let indexer: Bool?
+    /// The two-letter codes its clients name themselves by.
+    public let clients: [String]?
+
+    public var isEmpty: Bool {
+        verified == nil && idMatchesIp == nil && firstSeen == nil && lastSeen == nil
+            && lastReachable == nil && daysSeen == nil && numPorts == nil && peakNumPorts == nil
+            && indexer == nil && clients == nil
+    }
+}
+
+/// Where the address is. The first ten members are set whenever the object is,
+/// an empty string where not known; the rest, from `region` down, on every paid
+/// plan, and `nil` on Unlimited.
 public struct Location: Sendable, Hashable {
     /// The continent code, e.g. `EU`.
     public let continent: String
@@ -172,6 +383,25 @@ public struct Location: Sendable, Hashable {
     public let flagEmoji: String
     /// The flag's code points, e.g. `U+1F1E6 U+1F1F9`.
     public let flagUnicode: String
+    /// The region, a state or province.
+    public let region: String?
+    /// The ISO 3166-2 region code.
+    public let regionCode: String?
+    public let city: String?
+    public let postalCode: String?
+    /// The latitude of the city.
+    public let latitude: Double?
+    /// The longitude of the city.
+    public let longitude: Double?
+    /// The radius in km holding the true location with 67% confidence; 20000
+    /// for an address announced everywhere, as an anycast one is.
+    public let accuracyRadius: Int?
+    /// The GeoNames ID of the city.
+    public let geonameId: String?
+    /// The US TV market (DMA) code, empty outside the US.
+    public let dmaCode: String?
+    /// The day the range's location last changed.
+    public let lastChanged: String?
 }
 
 /// The autonomous system announcing the address. `asn` is 0 and the rest empty
@@ -188,6 +418,46 @@ public struct Asn: Sendable, Hashable {
     /// The announced prefix covering the address, the most specific when
     /// several do.
     public let prefix: String
+    /// The country the AS's registry assigned it to, or `nil` on an answer that
+    /// does not carry it.
+    public let country: String?
+    /// The announcement's RPKI status: `valid`, `invalid` or `not_found`, or
+    /// `nil` on an answer that does not carry it.
+    public let rpkiStatus: String?
+}
+
+/// Who uses the address. Every member is set whenever the object is, an empty
+/// string where no record covers the address.
+public struct Company: Sendable, Hashable {
+    /// Who uses the address.
+    public let name: String
+    /// Their domain.
+    public let domain: String
+    /// `hosting`, `isp`, `business`, `education` or `government`.
+    public let type: String?
+    /// ISO 3166 country code.
+    public let country: String?
+}
+
+/// Where to report abuse from the address. Every member is set whenever the
+/// object is, an empty string where no record covers the address.
+public struct AbuseContact: Sendable, Hashable {
+    /// Where to report abuse from the address.
+    public let email: String
+    /// The contact.
+    public let name: String?
+    /// Its phone number.
+    public let phone: String?
+    /// Its postal address.
+    public let address: String?
+    /// ISO 3166 country code.
+    public let country: String?
+    /// The registry block it was derived from.
+    public let network: String?
+    /// ARIN reports the contact answered its yearly validation.
+    public let validated: Bool?
+    /// Since when it has not.
+    public let unvalidatedSince: String?
 }
 
 // The one place a wire payload becomes the public shape. Absent-versus-false
@@ -206,6 +476,14 @@ extension LookupResult {
         self.isDcproxy = body.isDcproxy
         self.isMobproxy = body.isMobproxy
         self.isPubproxy = body.isPubproxy
+        self.isAnycast = body.isAnycast
+        self.isCarrier = body.isCarrier
+        self.isSatellite = body.isSatellite
+        self.isSsh = body.isSsh
+        self.isSmtp = body.isSmtp
+        self.isWeb = body.isWeb
+        self.isDnsResolver = body.isDnsResolver
+        self.isBittorrent = body.isBittorrent
         self.vpn = try body.vpn.map { try VpnDetail($0.value1) }
         self.hosting = try body.hosting.map { try ClassDetail($0.value1) }
         self.relay = try body.relay.map { try ClassDetail($0.value1) }
@@ -215,8 +493,18 @@ extension LookupResult {
         self.dcproxy = try body.dcproxy.map { try ProxyDetail($0.value1) }
         self.mobproxy = try body.mobproxy.map { try ProxyDetail($0.value1) }
         self.pubproxy = try body.pubproxy.map { try PubproxyDetail($0.value1) }
+        self.carrier = body.carrier.map { CarrierDetail($0.value1) }
+        self.satellite = body.satellite.map { SatelliteDetail($0.value1) }
+        self.ssh = body.ssh.map { SshDetail($0.value1) }
+        self.smtp = body.smtp.map { SmtpDetail($0.value1) }
+        self.web = body.web?.map(WebDetail.init)
+        self.dnsResolver = body.dnsResolver.map { DnsResolverDetail($0.value1) }
+        self.bittorrent = body.bittorrent.map { BitTorrentDetail($0.value1) }
         self.location = body.location.map(Location.init)
         self.asn = body.asn.map(Asn.init)
+        self.company = body.company.map(Company.init)
+        self.hostname = body.hostname
+        self.abuse = body.abuse.map(AbuseContact.init)
         self.trialExpired = body.trialExpired
         self.capReached = body.capReached
     }
@@ -265,6 +553,104 @@ extension PubproxyDetail {
     }
 }
 
+extension CarrierDetail {
+    init(_ wire: Components.Schemas.CarrierDetail) {
+        self.init(
+            name: wire.name, mcc: wire.mcc, mnc: wire.mnc, country: wire.country,
+            confidence: wire.confidence,
+        )
+    }
+
+    static let empty = CarrierDetail(name: nil, mcc: nil, mnc: nil, country: nil, confidence: nil)
+}
+
+extension SatelliteDetail {
+    init(_ wire: Components.Schemas.SatelliteDetail) {
+        self.init(
+            provider: wire.provider, providerName: wire.providerName, orbit: wire.orbit,
+            segment: wire.segment, country: wire.country, asn: wire.asn.map { Int($0) },
+            confidence: wire.confidence,
+        )
+    }
+
+    static let empty = SatelliteDetail(
+        provider: nil, providerName: nil, orbit: nil, segment: nil, country: nil, asn: nil,
+        confidence: nil,
+    )
+}
+
+extension SshDetail {
+    init(_ wire: Components.Schemas.SshDetail) {
+        self.init(
+            port: wire.port, banner: wire.banner, hostKeyFp: wire.hostKeyFp, sessionOk: wire.sessionOk,
+            firstSeen: wire.firstSeen, lastSeen: wire.lastSeen,
+        )
+    }
+
+    static let empty = SshDetail(
+        port: nil, banner: nil, hostKeyFp: nil, sessionOk: nil, firstSeen: nil, lastSeen: nil,
+    )
+}
+
+extension SmtpDetail {
+    init(_ wire: Components.Schemas.SmtpDetail) {
+        self.init(
+            port: wire.port, banner: wire.banner, sessionOk: wire.sessionOk, firstSeen: wire.firstSeen,
+            lastSeen: wire.lastSeen,
+        )
+    }
+
+    static let empty = SmtpDetail(port: nil, banner: nil, sessionOk: nil, firstSeen: nil, lastSeen: nil)
+}
+
+extension WebDetail {
+    init(_ wire: Components.Schemas.WebDetail) {
+        self.port = wire.port
+        self.tlsOk = wire.tlsOk
+        self.sessionOk = wire.sessionOk
+        self.statusCode = wire.statusCode
+        self.server = wire.server
+        self.location = wire.location
+        self.title = wire.title
+        self.certSubjectCn = wire.certSubjectCn
+        self.certSubjectO = wire.certSubjectO
+        self.certIssuerDn = wire.certIssuerDn
+        self.certBrowserTrusted = wire.certBrowserTrusted
+        self.tlsVersion = wire.tlsVersion
+        self.firstSeen = wire.firstSeen
+        self.lastSeen = wire.lastSeen
+    }
+}
+
+extension DnsResolverDetail {
+    init(_ wire: Components.Schemas.DnsResolverDetail) {
+        self.init(
+            port: wire.port, recursionAvailable: wire.recursionAvailable, rcode: wire.rcode,
+            answerCorrect: wire.answerCorrect, firstSeen: wire.firstSeen, lastSeen: wire.lastSeen,
+        )
+    }
+
+    static let empty = DnsResolverDetail(
+        port: nil, recursionAvailable: nil, rcode: nil, answerCorrect: nil, firstSeen: nil, lastSeen: nil,
+    )
+}
+
+extension BitTorrentDetail {
+    init(_ wire: Components.Schemas.BitTorrentDetail) {
+        self.init(
+            verified: wire.verified, idMatchesIp: wire.idMatchesIp, firstSeen: wire.firstSeen,
+            lastSeen: wire.lastSeen, lastReachable: wire.lastReachable, daysSeen: wire.daysSeen,
+            numPorts: wire.numPorts, peakNumPorts: wire.peakNumPorts, indexer: wire.indexer,
+            clients: wire.clients,
+        )
+    }
+
+    static let empty = BitTorrentDetail(
+        verified: nil, idMatchesIp: nil, firstSeen: nil, lastSeen: nil, lastReachable: nil, daysSeen: nil,
+        numPorts: nil, peakNumPorts: nil, indexer: nil, clients: nil,
+    )
+}
+
 extension Location {
     init(_ wire: Components.Schemas.Location) {
         self.continent = wire.continent
@@ -277,28 +663,93 @@ extension Location {
         self.currencySymbol = wire.currencySymbol
         self.flagEmoji = wire.flagEmoji
         self.flagUnicode = wire.flagUnicode
+        self.region = wire.region
+        self.regionCode = wire.regionCode
+        self.city = wire.city
+        self.postalCode = wire.postalCode
+        self.latitude = wire.latitude
+        self.longitude = wire.longitude
+        self.accuracyRadius = wire.accuracyRadius
+        self.geonameId = wire.geonameId
+        self.dmaCode = wire.dmaCode
+        self.lastChanged = wire.lastChanged
     }
 
-    /// Every member present and empty, as the API answers an address in no
-    /// country.
+    /// Every member present and empty or zero, as the API answers a bogon.
     static let empty = Location(
         continent: "", continentName: "", country: "", countryName: "", timezone: "",
         currencyCode: "", currencyName: "", currencySymbol: "", flagEmoji: "", flagUnicode: "",
+        region: "", regionCode: "", city: "", postalCode: "", latitude: 0, longitude: 0,
+        accuracyRadius: 0, geonameId: "", dmaCode: "", lastChanged: "",
     )
 }
 
 extension Asn {
-    init(_ wire: Components.Schemas.Asn) {
+    init(_ wire: WireAsn) {
         self.asn = Int(wire.asn)
         self.name = wire.name
         self.domain = wire.domain
-        self.type = wire._type
+        self.type = wire.type
         self.prefix = wire.prefix
+        self.country = wire.country
+        self.rpkiStatus = wire.rpkiStatus
     }
 
     /// AS 0 and every other member empty, as the API answers an address no
     /// announcement covers.
-    static let empty = Asn(asn: 0, name: "", domain: "", type: "", prefix: "")
+    static let empty = Asn(asn: 0, name: "", domain: "", type: "", prefix: "", country: "", rpkiStatus: "")
+}
+
+/// The spec's `Asn`, read in place of the generated type (the config's
+/// `typeOverrides`) so that `country` and `rpki_status` stay optional. The
+/// spec lists both as required from 2026.11.20, but the conformance corpus
+/// still serves answers without them and expects each to read, which the
+/// generated decoder refuses as a whole failed call.
+struct WireAsn: Codable, Hashable, Sendable {
+    var asn: Int64
+    var name: String
+    var domain: String
+    var type: String
+    var prefix: String
+    var country: String?
+    var rpkiStatus: String?
+
+    enum CodingKeys: String, CodingKey {
+        case asn, name, domain, type, prefix, country
+        case rpkiStatus = "rpki_status"
+    }
+}
+
+extension Company {
+    init(_ wire: Components.Schemas.Company) {
+        self.name = wire.name
+        self.domain = wire.domain
+        self.type = wire._type
+        self.country = wire.country
+    }
+
+    /// Every member present and empty, as the API answers a bogon.
+    static let empty = Company(name: "", domain: "", type: "", country: "")
+}
+
+extension AbuseContact {
+    init(_ wire: Components.Schemas.AbuseContact) {
+        self.email = wire.email
+        self.name = wire.name
+        self.phone = wire.phone
+        self.address = wire.address
+        self.country = wire.country
+        self.network = wire.network
+        self.validated = wire.validated
+        self.unvalidatedSince = wire.unvalidatedSince
+    }
+
+    /// Every member present and empty, `validated` false, as the API answers a
+    /// bogon.
+    static let empty = AbuseContact(
+        email: "", name: "", phone: "", address: "", country: "", network: "", validated: false,
+        unvalidatedSince: "",
+    )
 }
 
 // A `format: date` member reaches the generated type as a plain string, so

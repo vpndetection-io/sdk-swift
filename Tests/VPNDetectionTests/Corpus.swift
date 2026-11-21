@@ -46,11 +46,22 @@ struct Corpus: Decodable, Sendable {
         let why: String
     }
 
+    /// The bogon answer's two lists, and in `members` every other key the corpus
+    /// gives it (location, asn, web, hostname, company, abuse and whatever it
+    /// gains), each a wire member the answer must hold as written.
     struct BogonResponse: Decodable, Sendable {
         let flagsFalse: [String]
         let emptyObjects: [String]
-        let location: [String: JSONValue]
-        let asn: [String: JSONValue]
+        let members: [String: JSONValue]
+
+        init(from decoder: any Decoder) throws {
+            var all = try JSONValue(from: decoder).objectValue
+            flagsFalse = (all.removeValue(forKey: "flagsFalse")?.arrayValue ?? []).compactMap(\.stringValue)
+            emptyObjects = (all.removeValue(forKey: "emptyObjects")?.arrayValue ?? [])
+                .compactMap(\.stringValue)
+            all.removeValue(forKey: "why")
+            members = all
+        }
     }
 
     struct LookupCase: Decodable, Sendable {
@@ -59,18 +70,36 @@ struct Corpus: Decodable, Sendable {
         let body: JSONValue
         let expect: Expect
 
+        /// The keys naming a role, and in `members` every other key, each a wire
+        /// member the answer must hold as written. Reading them all, rather than
+        /// a list of the ones known when this was written, is what keeps a member
+        /// the corpus gains from passing unasserted: one the suite has no reader
+        /// for fails in `expectMember`.
         struct Expect: Decodable, Sendable {
             let ip: String
             let isBogon: Bool
             let present: [String: Bool]?
             let absent: [String]?
             let emptyPresent: [String]?
-            let vpn: [String: JSONValue]?
-            let hosting: [String: JSONValue]?
-            let dcproxy: [String: JSONValue]?
-            let pubproxy: [String: JSONValue]?
-            let location: [String: JSONValue]?
-            let asn: [String: JSONValue]?
+            let members: [String: JSONValue]
+
+            private enum Role: String, CodingKey, CaseIterable {
+                case ip, isBogon, present, absent, emptyPresent
+            }
+
+            init(from decoder: any Decoder) throws {
+                let roles = try decoder.container(keyedBy: Role.self)
+                ip = try roles.decode(String.self, forKey: .ip)
+                isBogon = try roles.decode(Bool.self, forKey: .isBogon)
+                present = try roles.decodeIfPresent([String: Bool].self, forKey: .present)
+                absent = try roles.decodeIfPresent([String].self, forKey: .absent)
+                emptyPresent = try roles.decodeIfPresent([String].self, forKey: .emptyPresent)
+                var all = try JSONValue(from: decoder).objectValue
+                for role in Role.allCases {
+                    all.removeValue(forKey: role.rawValue)
+                }
+                members = all
+            }
         }
     }
 
@@ -229,22 +258,43 @@ enum Wire {
         "is_dcproxy": { $0.isDcproxy },
         "is_mobproxy": { $0.isMobproxy },
         "is_pubproxy": { $0.isPubproxy },
+        "is_anycast": { $0.isAnycast },
+        "is_carrier": { $0.isCarrier },
+        "is_satellite": { $0.isSatellite },
+        "is_ssh": { $0.isSsh },
+        "is_smtp": { $0.isSmtp },
+        "is_web": { $0.isWeb },
+        "is_dns_resolver": { $0.isDnsResolver },
+        "is_bittorrent": { $0.isBittorrent },
         "trial_expired": { $0.trialExpired },
         "cap_reached": { $0.capReached },
     ]
 
-    static let details: [String: @Sendable (LookupResult) -> [String: JSONValue]?] = [
-        "vpn": { $0.vpn?.wireFields },
-        "hosting": { $0.hosting?.wireFields },
-        "relay": { $0.relay?.wireFields },
-        "tor": { $0.tor?.wireFields },
-        "cdn": { $0.cdn?.wireFields },
-        "resproxy": { $0.resproxy?.wireFields },
-        "dcproxy": { $0.dcproxy?.wireFields },
-        "mobproxy": { $0.mobproxy?.wireFields },
-        "pubproxy": { $0.pubproxy?.wireFields },
-        "location": { $0.location?.wireFields },
-        "asn": { $0.asn?.wireFields },
+    /// Every member that is not a flag, as the JSON it was served as: a detail
+    /// or shared object as an object of its present keys, `web` as a list of
+    /// them, `hostname` as a string.
+    static let members: [String: @Sendable (LookupResult) -> JSONValue?] = [
+        "vpn": { $0.vpn.map { .object($0.wireFields) } },
+        "hosting": { $0.hosting.map { .object($0.wireFields) } },
+        "relay": { $0.relay.map { .object($0.wireFields) } },
+        "tor": { $0.tor.map { .object($0.wireFields) } },
+        "cdn": { $0.cdn.map { .object($0.wireFields) } },
+        "resproxy": { $0.resproxy.map { .object($0.wireFields) } },
+        "dcproxy": { $0.dcproxy.map { .object($0.wireFields) } },
+        "mobproxy": { $0.mobproxy.map { .object($0.wireFields) } },
+        "pubproxy": { $0.pubproxy.map { .object($0.wireFields) } },
+        "carrier": { $0.carrier.map { .object($0.wireFields) } },
+        "satellite": { $0.satellite.map { .object($0.wireFields) } },
+        "ssh": { $0.ssh.map { .object($0.wireFields) } },
+        "smtp": { $0.smtp.map { .object($0.wireFields) } },
+        "web": { $0.web.map { .array($0.map { .object($0.wireFields) }) } },
+        "dns_resolver": { $0.dnsResolver.map { .object($0.wireFields) } },
+        "bittorrent": { $0.bittorrent.map { .object($0.wireFields) } },
+        "location": { $0.location.map { .object($0.wireFields) } },
+        "asn": { $0.asn.map { .object($0.wireFields) } },
+        "company": { $0.company.map { .object($0.wireFields) } },
+        "hostname": { $0.hostname.map { .string($0) } },
+        "abuse": { $0.abuse.map { .object($0.wireFields) } },
     ]
 
     static func isKnownKey(_ wire: String) -> Bool {
@@ -303,23 +353,172 @@ extension PubproxyDetail {
     }
 }
 
-extension Location {
+extension CarrierDetail {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [:]
+        name.map { fields["name"] = .string($0) }
+        mcc.map { fields["mcc"] = .string($0) }
+        mnc.map { fields["mnc"] = .string($0) }
+        country.map { fields["country"] = .string($0) }
+        confidence.map { fields["confidence"] = .string($0) }
+        return fields
+    }
+}
+
+extension SatelliteDetail {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [:]
+        provider.map { fields["provider"] = .string($0) }
+        providerName.map { fields["provider_name"] = .string($0) }
+        orbit.map { fields["orbit"] = .string($0) }
+        segment.map { fields["segment"] = .string($0) }
+        country.map { fields["country"] = .string($0) }
+        asn.map { fields["asn"] = .int($0) }
+        confidence.map { fields["confidence"] = .string($0) }
+        return fields
+    }
+}
+
+extension SshDetail {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [:]
+        port.map { fields["port"] = .int($0) }
+        banner.map { fields["banner"] = .string($0) }
+        hostKeyFp.map { fields["host_key_fp"] = .string($0) }
+        sessionOk.map { fields["session_ok"] = .bool($0) }
+        firstSeen.map { fields["first_seen"] = .string($0) }
+        lastSeen.map { fields["last_seen"] = .string($0) }
+        return fields
+    }
+}
+
+extension SmtpDetail {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [:]
+        port.map { fields["port"] = .int($0) }
+        banner.map { fields["banner"] = .string($0) }
+        sessionOk.map { fields["session_ok"] = .bool($0) }
+        firstSeen.map { fields["first_seen"] = .string($0) }
+        lastSeen.map { fields["last_seen"] = .string($0) }
+        return fields
+    }
+}
+
+extension WebDetail {
     var wireFields: [String: JSONValue] {
         [
+            "port": .int(port), "tls_ok": .bool(tlsOk), "session_ok": .bool(sessionOk),
+            "status_code": .int(statusCode), "server": .string(server), "location": .string(location),
+            "title": .string(title), "cert_subject_cn": .string(certSubjectCn),
+            "cert_subject_o": .string(certSubjectO), "cert_issuer_dn": .string(certIssuerDn),
+            "cert_browser_trusted": .bool(certBrowserTrusted), "tls_version": .string(tlsVersion),
+            "first_seen": .string(firstSeen), "last_seen": .string(lastSeen),
+        ]
+    }
+}
+
+extension DnsResolverDetail {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [:]
+        port.map { fields["port"] = .int($0) }
+        recursionAvailable.map { fields["recursion_available"] = .bool($0) }
+        rcode.map { fields["rcode"] = .int($0) }
+        answerCorrect.map { fields["answer_correct"] = .bool($0) }
+        firstSeen.map { fields["first_seen"] = .string($0) }
+        lastSeen.map { fields["last_seen"] = .string($0) }
+        return fields
+    }
+}
+
+extension BitTorrentDetail {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [:]
+        verified.map { fields["verified"] = .bool($0) }
+        idMatchesIp.map { fields["id_matches_ip"] = .bool($0) }
+        firstSeen.map { fields["first_seen"] = .string($0) }
+        lastSeen.map { fields["last_seen"] = .string($0) }
+        lastReachable.map { fields["last_reachable"] = .string($0) }
+        daysSeen.map { fields["days_seen"] = .int($0) }
+        numPorts.map { fields["num_ports"] = .int($0) }
+        peakNumPorts.map { fields["peak_num_ports"] = .int($0) }
+        indexer.map { fields["indexer"] = .bool($0) }
+        clients.map { fields["clients"] = .array($0.map { .string($0) }) }
+        return fields
+    }
+}
+
+extension Location {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [
             "continent": .string(continent), "continent_name": .string(continentName),
             "country": .string(country), "country_name": .string(countryName),
             "timezone": .string(timezone), "currency_code": .string(currencyCode),
             "currency_name": .string(currencyName), "currency_symbol": .string(currencySymbol),
             "flag_emoji": .string(flagEmoji), "flag_unicode": .string(flagUnicode),
         ]
+        region.map { fields["region"] = .string($0) }
+        regionCode.map { fields["region_code"] = .string($0) }
+        city.map { fields["city"] = .string($0) }
+        postalCode.map { fields["postal_code"] = .string($0) }
+        latitude.map { fields["latitude"] = .double($0) }
+        longitude.map { fields["longitude"] = .double($0) }
+        accuracyRadius.map { fields["accuracy_radius"] = .int($0) }
+        geonameId.map { fields["geoname_id"] = .string($0) }
+        dmaCode.map { fields["dma_code"] = .string($0) }
+        lastChanged.map { fields["last_changed"] = .string($0) }
+        return fields
     }
 }
 
 extension Asn {
     var wireFields: [String: JSONValue] {
-        [
+        var fields: [String: JSONValue] = [
             "asn": .int(asn), "name": .string(name), "domain": .string(domain),
             "type": .string(type), "prefix": .string(prefix),
         ]
+        country.map { fields["country"] = .string($0) }
+        rpkiStatus.map { fields["rpki_status"] = .string($0) }
+        return fields
+    }
+}
+
+extension Company {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = ["name": .string(name), "domain": .string(domain)]
+        type.map { fields["type"] = .string($0) }
+        country.map { fields["country"] = .string($0) }
+        return fields
+    }
+}
+
+extension AbuseContact {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = ["email": .string(email)]
+        name.map { fields["name"] = .string($0) }
+        phone.map { fields["phone"] = .string($0) }
+        address.map { fields["address"] = .string($0) }
+        country.map { fields["country"] = .string($0) }
+        network.map { fields["network"] = .string($0) }
+        validated.map { fields["validated"] = .bool($0) }
+        unvalidatedSince.map { fields["unvalidated_since"] = .string($0) }
+        return fields
+    }
+}
+
+extension JSONValue {
+    /// The same value with every whole-number double read as an integer, so a
+    /// served `0` and a decoded `0.0` compare equal while `-33.86785` stays as it
+    /// is.
+    var numbersNormalized: JSONValue {
+        switch self {
+        case .double(let value):
+            if let whole = Int(exactly: value) {
+                return .int(whole)
+            }
+            return self
+        case .array(let items): return .array(items.map(\.numbersNormalized))
+        case .object(let members): return .object(members.mapValues(\.numbersNormalized))
+        default: return self
+        }
     }
 }

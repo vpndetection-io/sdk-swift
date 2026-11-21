@@ -68,10 +68,12 @@ struct ConformanceTests {
             expectFlag(result, name, is: false)
         }
         for name in corpus.bogonResponse.emptyObjects {
-            expectDetail(result, name, is: [:])
+            expectMember(result, name, is: .object([:]))
         }
-        expectDetail(result, "location", is: corpus.bogonResponse.location)
-        expectDetail(result, "asn", is: corpus.bogonResponse.asn)
+        #expect(corpus.bogonResponse.members.count >= 6, "the corpus names the bogon's shared members")
+        for (name, want) in corpus.bogonResponse.members {
+            expectMember(result, name, is: want)
+        }
         await #expect(stub.callCount == 0, "a bogon must not reach the network")
     }
 
@@ -92,14 +94,11 @@ struct ConformanceTests {
                 expectAbsent(result, name, testCase.name)
             }
             for name in testCase.expect.emptyPresent ?? [] {
-                expectDetail(result, name, is: [:], testCase.name)
+                expectMember(result, name, is: .object([:]), testCase.name)
             }
-            testCase.expect.vpn.map { expectDetail(result, "vpn", is: $0, testCase.name) }
-            testCase.expect.hosting.map { expectDetail(result, "hosting", is: $0, testCase.name) }
-            testCase.expect.dcproxy.map { expectDetail(result, "dcproxy", is: $0, testCase.name) }
-            testCase.expect.pubproxy.map { expectDetail(result, "pubproxy", is: $0, testCase.name) }
-            testCase.expect.location.map { expectDetail(result, "location", is: $0, testCase.name) }
-            testCase.expect.asn.map { expectDetail(result, "asn", is: $0, testCase.name) }
+            for (name, want) in testCase.expect.members {
+                expectMember(result, name, is: want, testCase.name)
+            }
         }
     }
 
@@ -417,16 +416,18 @@ struct ConformanceTests {
     @Test("every wire name the corpus asserts is a key of the served response")
     func corpusWireNamesAreRealKeys() {
         var names = Set(corpus.bogonResponse.flagsFalse + corpus.bogonResponse.emptyObjects)
+        names.formUnion(corpus.bogonResponse.members.keys)
         for testCase in corpus.lookup {
             names.formUnion(testCase.expect.present?.keys ?? [:].keys)
             names.formUnion(testCase.expect.absent ?? [])
             names.formUnion(testCase.expect.emptyPresent ?? [])
+            names.formUnion(testCase.expect.members.keys)
         }
         for name in names {
             #expect(Wire.isKnownKey(name), "\(name) is not a member of the served response")
             #expect(
                 name == "is_vpn" || name == "ip" || Wire.flags[name] != nil
-                    || Wire.details[name] != nil,
+                    || Wire.members[name] != nil,
                 "\(name) is served but nothing in the result exposes it",
             )
         }
@@ -465,24 +466,48 @@ extension ConformanceTests {
             #expect(reader(result) == nil, "\(label): \(wire) must be ABSENT, not false")
             return
         }
-        guard let reader = Wire.details[wire] else {
-            Issue.record("\(label): \(wire) is neither a flag nor a detail object")
+        guard let reader = Wire.members[wire] else {
+            Issue.record("\(label): \(wire) is neither a flag nor a member this suite reads")
             return
         }
         #expect(reader(result) == nil, "\(label): \(wire) must be ABSENT, not empty")
     }
 
-    func expectDetail(
-        _ result: LookupResult, _ wire: String, is want: [String: JSONValue], _ label: String = "",
-    ) {
-        guard let reader = Wire.details[wire] else {
-            Issue.record("\(label): \(wire) is not a known detail object")
+    /// The member as served, key by key: a key the answer lacks, an extra one or
+    /// a different value fails, and so does a member the corpus expects that
+    /// nothing here reads.
+    func expectMember(_ result: LookupResult, _ wire: String, is want: JSONValue, _ label: String = "") {
+        guard let reader = Wire.members[wire] else {
+            Issue.record("\(label): the corpus expects \(wire), which this suite does not read")
             return
         }
         guard let got = reader(result) else {
             Issue.record("\(label): \(wire) must be present, but is absent")
             return
         }
-        #expect(got == want, "\(label): \(wire)")
+        expectSame(got.numbersNormalized, want.numbersNormalized, "\(label): \(wire)")
+    }
+
+    func expectSame(_ got: JSONValue, _ want: JSONValue, _ path: String) {
+        switch (got, want) {
+        case (.object(let have), .object(let wanted)):
+            for (key, value) in wanted {
+                guard let held = have[key] else {
+                    Issue.record("\(path).\(key) must be present, but is absent")
+                    continue
+                }
+                expectSame(held, value, "\(path).\(key)")
+            }
+            for key in have.keys where wanted[key] == nil {
+                Issue.record("\(path).\(key) is set, but the corpus's answer has no such key")
+            }
+        case (.array(let have), .array(let wanted)):
+            #expect(have.count == wanted.count, "\(path): \(have.count) rows, want \(wanted.count)")
+            for (index, (held, value)) in zip(have, wanted).enumerated() {
+                expectSame(held, value, "\(path).\(index)")
+            }
+        default:
+            #expect(got == want, "\(path)")
+        }
     }
 }

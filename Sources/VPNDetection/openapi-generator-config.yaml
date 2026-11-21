@@ -10,3 +10,4 @@ typeOverrides:
     EntitlementPlan: WireEntitlementPlan
     Database: WireDatabase
     Download: WireDownload
+    Asn: WireAsn

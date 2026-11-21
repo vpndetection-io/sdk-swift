@@ -30,7 +30,7 @@ Requires Swift 6.1 or newer, and macOS 13, iOS 16, tvOS 16, watchOS 9 or visionO
 
 ## Usage
 
-**No API key needed to start.** Unlimited, the free plan, answers `ip`, `is_vpn`, Tor and relay detection, `location` and `asn`, with no daily or monthly cap, with a key or without one.
+**No API key needed to start.** Unlimited, the free plan, answers `ip`, `is_vpn`, Tor and relay detection, `is_anycast`, `hostname` (the reverse DNS name), `location` to the country and `asn` with the AS's country and RPKI status, with no daily or monthly cap, with a key or without one.
 
 ```swift
 import VPNDetection
@@ -45,7 +45,7 @@ print(result.asn?.name)             // who runs the announcing network
 
 ### With an API key
 
-Every paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider (its ID and its name), confidence and last-seen detail behind each flag. The plans differ only in how many lookups they include, and a free account tries every field. Create a key in the [console](https://app.vpndetection.io), then pass it in:
+Every paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider (its ID and its name), confidence and last-seen detail behind each flag; `is_carrier`, `is_satellite`, `is_ssh`, `is_smtp`, `is_web`, `is_dns_resolver` and `is_bittorrent`, with the detail behind each (`web` is a list, a row per port that answered); the `company` using the address and its `abuse` contact; and `location` down to the city, postal code and coordinates. The plans differ only in how many lookups they include, and a free account tries every field. Create a key in the [console](https://app.vpndetection.io), then pass it in:
 
 ```swift
 let client = VPNDetectionClient(apiKey: ProcessInfo.processInfo.environment["VPNDETECTION_API_KEY"]!)
@@ -278,13 +278,14 @@ Each redirect URI must be https on a public host name, or http on a loopback add
 
 ### Absent is not false
 
-Unlimited leaves out `isHosting`, `isCdn` and the four proxy flags, and of the detail behind each flag it answers only Tor's and relay's; a free-plan key's answer carries `trialExpired`, true once its trial is spent, and a paid key's carries `capReached`, true once its organization's overage cap is reached and the answer has Unlimited's. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
+Unlimited leaves out `isHosting`, `isCdn`, the four proxy flags and the carrier, satellite, SSH, SMTP, web, DNS resolver and BitTorrent flags, of the detail behind each flag it answers only Tor's and relay's, and it leaves out `company`, `abuse` and the finer `location` members, from `region` down; a free-plan key's answer carries `trialExpired`, true once its trial is spent, and a paid key's carries `capReached`, true once its organization's overage cap is reached and the answer has Unlimited's. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
 
 ```swift
-result.isHosting ?? false   // when you only want the flag
-result.isHosting == nil     // on Unlimited: not in your plan
-result.trialExpired == true // a free-plan key's trial is spent
-result.capReached == true   // a paid key past its overage cap
+result.isHosting ?? false    // when you only want the flag
+result.isHosting == nil      // on Unlimited: not in your plan
+result.location?.city == nil // on Unlimited: not in your plan either
+result.trialExpired == true  // a free-plan key's trial is spent
+result.capReached == true    // a paid key past its overage cap
 ```
 
 ### A value the API adds

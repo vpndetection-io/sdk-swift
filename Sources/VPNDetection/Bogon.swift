@@ -41,7 +41,8 @@ func unmapped(_ ip: String) -> String {
 extension LookupResult {
     /// The answer a bogon gets, in the full shape the API serves at its widest
     /// plan: every flag present and false, every detail object present and empty,
-    /// and a location and AS of empty strings and AS 0.
+    /// `web` an empty list, `hostname` an empty string, and a location, AS,
+    /// company and abuse contact of empty strings and zeros.
     ///
     /// `isBogon` is true, as the API answers reserved space. Note this is deliberately the WIDEST shape regardless
     /// of your plan, so do not infer which fields your plan includes from it.
@@ -60,9 +61,14 @@ extension LookupResult {
             ip: ip, isVpn: false, isBogon: true,
             isHosting: false, isRelay: false, isTor: false, isCdn: false,
             isResproxy: false, isDcproxy: false, isMobproxy: false, isPubproxy: false,
+            isAnycast: false, isCarrier: false, isSatellite: false, isSsh: false, isSmtp: false,
+            isWeb: false, isDnsResolver: false, isBittorrent: false,
             vpn: vpn, hosting: classDetail, relay: classDetail, tor: classDetail,
             cdn: classDetail, resproxy: proxy, dcproxy: proxy, mobproxy: proxy, pubproxy: pubproxy,
-            location: .empty, asn: .empty, trialExpired: nil, capReached: nil,
+            carrier: .empty, satellite: .empty, ssh: .empty, smtp: .empty, web: [],
+            dnsResolver: .empty, bittorrent: .empty,
+            location: .empty, asn: .empty, company: .empty, hostname: "", abuse: .empty,
+            trialExpired: nil, capReached: nil,
         )
     }
 }

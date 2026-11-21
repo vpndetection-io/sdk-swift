@@ -139,17 +139,29 @@ extension LookupResult {
     /// still a member that is there.
     var servedFields: Set<String> {
         var fields: Set<String> = ["ip", "is_vpn"]
-        let flags: [String: Bool?] = [
-            "is_hosting": isHosting, "is_relay": isRelay, "is_tor": isTor, "is_cdn": isCdn,
-            "is_resproxy": isResproxy, "is_dcproxy": isDcproxy, "is_mobproxy": isMobproxy,
-        ]
-        for (name, flag) in flags where flag != nil {
+        for (name, flag) in servedFlags where flag != nil {
             fields.insert(name)
         }
         let details: [String: Bool] = [
             "vpn": vpn != nil, "hosting": hosting != nil, "relay": relay != nil,
             "tor": tor != nil, "cdn": cdn != nil, "resproxy": resproxy != nil,
-            "dcproxy": dcproxy != nil, "mobproxy": mobproxy != nil,
+            "dcproxy": dcproxy != nil, "mobproxy": mobproxy != nil, "pubproxy": pubproxy != nil,
+            "carrier": carrier != nil, "satellite": satellite != nil, "ssh": ssh != nil,
+            "smtp": smtp != nil, "web": web != nil, "dns_resolver": dnsResolver != nil,
+            "bittorrent": bittorrent != nil, "location": location != nil, "asn": asn != nil,
+            "company": company != nil, "hostname": hostname != nil, "abuse": abuse != nil,
+            // A shared object's paid members are fields of their own: Unlimited
+            // answers the country, a paid plan the city as well.
+            "location.region": location?.region != nil,
+            "location.region_code": location?.regionCode != nil,
+            "location.city": location?.city != nil,
+            "location.postal_code": location?.postalCode != nil,
+            "location.latitude": location?.latitude != nil,
+            "location.longitude": location?.longitude != nil,
+            "location.accuracy_radius": location?.accuracyRadius != nil,
+            "location.geoname_id": location?.geonameId != nil,
+            "location.dma_code": location?.dmaCode != nil,
+            "location.last_changed": location?.lastChanged != nil,
         ]
         for (name, present) in details where present {
             fields.insert(name)
@@ -160,12 +172,20 @@ extension LookupResult {
     /// The flags this answer carried and answered `false` to. A mapper that
     /// copied on truthiness rather than presence would leave this empty.
     var flagsServedFalse: Set<String> {
-        let flags: [String: Bool?] = [
-            "is_vpn": isVpn, "is_hosting": isHosting, "is_relay": isRelay, "is_tor": isTor,
-            "is_cdn": isCdn, "is_resproxy": isResproxy, "is_dcproxy": isDcproxy,
-            "is_mobproxy": isMobproxy,
-        ]
+        var flags = servedFlags
+        flags["is_vpn"] = isVpn
         return Set(flags.filter { $0.value == false }.keys)
+    }
+
+    /// Every flag a plan may leave out, by its wire name.
+    private var servedFlags: [String: Bool?] {
+        [
+            "is_hosting": isHosting, "is_relay": isRelay, "is_tor": isTor, "is_cdn": isCdn,
+            "is_resproxy": isResproxy, "is_dcproxy": isDcproxy, "is_mobproxy": isMobproxy,
+            "is_pubproxy": isPubproxy, "is_anycast": isAnycast, "is_carrier": isCarrier,
+            "is_satellite": isSatellite, "is_ssh": isSsh, "is_smtp": isSmtp, "is_web": isWeb,
+            "is_dns_resolver": isDnsResolver, "is_bittorrent": isBittorrent,
+        ]
     }
 }
 

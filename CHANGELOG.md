@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 5.1.0 - 2026-11-21
+
+### Features
+
+- Read the network, service, company and abuse members of an answer ([`c0db036`](https://github.com/vpndetection-io/sdk-swift/commit/c0db0363e4b3023f35624de480b616bbc275c599))
+
 ## 5.0.1 - 2026-11-19
 
 ### Fixes

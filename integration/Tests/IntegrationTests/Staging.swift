@@ -148,8 +148,9 @@ extension LookupResult {
             "dcproxy": dcproxy != nil, "mobproxy": mobproxy != nil, "pubproxy": pubproxy != nil,
             "carrier": carrier != nil, "satellite": satellite != nil, "ssh": ssh != nil,
             "smtp": smtp != nil, "web": web != nil, "dns_resolver": dnsResolver != nil,
-            "bittorrent": bittorrent != nil, "location": location != nil, "asn": asn != nil,
-            "company": company != nil, "hostname": hostname != nil, "abuse": abuse != nil,
+            "bittorrent": bittorrent != nil, "bot": bot != nil, "location": location != nil,
+            "asn": asn != nil, "company": company != nil, "hostname": hostname != nil,
+            "abuse": abuse != nil,
             // A shared object's paid members are fields of their own: Unlimited
             // answers the country, a paid plan the city as well.
             "location.region": location?.region != nil,
@@ -184,7 +185,7 @@ extension LookupResult {
             "is_resproxy": isResproxy, "is_dcproxy": isDcproxy, "is_mobproxy": isMobproxy,
             "is_pubproxy": isPubproxy, "is_anycast": isAnycast, "is_carrier": isCarrier,
             "is_satellite": isSatellite, "is_ssh": isSsh, "is_smtp": isSmtp, "is_web": isWeb,
-            "is_dns_resolver": isDnsResolver, "is_bittorrent": isBittorrent,
+            "is_dns_resolver": isDnsResolver, "is_bittorrent": isBittorrent, "is_bot": isBot,
         ]
     }
 }

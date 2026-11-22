@@ -465,11 +465,11 @@ public struct Asn: Sendable, Hashable {
     /// The announced prefix covering the address, the most specific when
     /// several do.
     public let prefix: String
-    /// The country the AS's registry assigned it to, or `nil` on an answer that
-    /// does not carry it.
+    /// The country the AS's registry assigned it to. Every answer carries it;
+    /// an answer without it is refused.
     public let country: String?
-    /// The announcement's RPKI status: `valid`, `invalid` or `not_found`, or
-    /// `nil` on an answer that does not carry it.
+    /// The announcement's RPKI status: `valid`, `invalid` or `not_found`. Every
+    /// answer carries it; an answer without it is refused.
     public let rpkiStatus: String?
 }
 
@@ -766,18 +766,17 @@ extension Asn {
 }
 
 /// The spec's `Asn`, read in place of the generated type (the config's
-/// `typeOverrides`) so that `country` and `rpki_status` stay optional. The
-/// spec lists both as required from 2026.11.20, but the conformance corpus
-/// still serves answers without them and expects each to read, which the
-/// generated decoder refuses as a whole failed call.
+/// `typeOverrides`). Every member is required, as the spec lists them, so an
+/// answer missing one, or carrying a null, is refused; the public `Asn` keeps
+/// `country` and `rpkiStatus` optional because 5.1.0 shipped them that way.
 struct WireAsn: Codable, Hashable, Sendable {
     var asn: Int64
     var name: String
     var domain: String
     var type: String
     var prefix: String
-    var country: String?
-    var rpkiStatus: String?
+    var country: String
+    var rpkiStatus: String
 
     enum CodingKeys: String, CodingKey {
         case asn, name, domain, type, prefix, country

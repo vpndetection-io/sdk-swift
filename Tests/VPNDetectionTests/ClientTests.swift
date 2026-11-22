@@ -271,6 +271,51 @@ struct ClientTests {
         }
     }
 
+    // Through 5.1.0 the AS's country and RPKI status were read as optional, so
+    // an answer without them came back as one.
+    @Test("an AS without its country or RPKI status is a retried server error")
+    func asnWithoutCountryOrRpkiStatusIsRetried() async throws {
+        let asn: [String: Any] = [
+            "asn": 9009, "name": "M247 Europe SRL", "domain": "m247global.com", "type": "hosting",
+            "prefix": "146.70.116.0/24", "country": "RO", "rpki_status": "valid",
+        ]
+        func answer(_ asn: [String: Any], _ ip: String = "45.83.91.1") -> [String: Any] {
+            ["ip": ip, "is_vpn": true, "asn": asn]
+        }
+        let served = try await client(StubTransport(["45.83.91.1": .json(answer(asn))])).lookup("45.83.91.1")
+        #expect(served.asn?.country == "RO")
+        #expect(served.asn?.rpkiStatus == "valid")
+
+        for member in ["country", "rpki_status"] {
+            var missing = asn
+            missing.removeValue(forKey: member)
+            var null = asn
+            null[member] = NSNull()
+            var number = asn
+            number[member] = 1
+            for (label, cut) in [("without \(member)", missing), ("\(member) of null", null), ("\(member) of 1", number)] {
+                let stub = StubTransport(["45.83.91.1": .json(answer(cut))])
+                let failure = await #expect(throws: VPNDetectionError.self, "\(label)") {
+                    try await client(stub, cache: nil, retries: 2).lookup("45.83.91.1")
+                }
+                #expect(failure?.kind == .serverError, "\(label)")
+                #expect(failure?.status == 200, "\(label)")
+                await #expect(stub.callCount == 3, "\(label)")
+
+                let entries = ["45.83.91.1": answer(cut), "45.83.91.2": answer(asn, "45.83.91.2")]
+                let batch = StubTransport(["batch": .json(["results": entries, "errors": [:]])])
+                let results = try await client(batch, cache: nil, retries: 2)
+                    .lookupBatch(["45.83.91.1", "45.83.91.2"])
+                guard case .failure(let error) = results["45.83.91.1"], case .success = results["45.83.91.2"] else {
+                    Issue.record("\(label): the batch entry came back as an answer, or the good one beside it failed")
+                    continue
+                }
+                #expect(error.kind == .serverError, "\(label): batch")
+                await #expect(batch.callCount == 1, "\(label): batch")
+            }
+        }
+    }
+
     // Through 4.8.0 an empty `error` hid the `rc` beside it, and an empty `rc`
     // alone was the message.
     @Test("an empty message in the envelope gives way to the other member, then the status")

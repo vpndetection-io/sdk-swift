@@ -53,6 +53,10 @@ public struct LookupResult: Sendable, Hashable {
     /// Whether a BitTorrent client was seen on the address in the last 90 days.
     /// On every paid plan.
     public let isBittorrent: Bool?
+    /// Whether an automated client uses the address, such as a search engine's
+    /// or an AI company's crawler, an uptime monitor, an internet scanner or a
+    /// webhook sender. Every answer carries it, with or without a key.
+    public let isBot: Bool?
 
     public let vpn: VpnDetail?
     public let hosting: ClassDetail?
@@ -79,6 +83,10 @@ public struct LookupResult: Sendable, Hashable {
     public let dnsResolver: DnsResolverDetail?
     /// Detail for `isBittorrent`. Empty when it is false. Every paid plan.
     public let bittorrent: BitTorrentDetail?
+    /// Detail for `isBot`: whose bot uses the address, what it does and whether
+    /// its operator vouches for the address. Empty when it is false. Every paid
+    /// plan.
+    public let bot: BotDetail?
     /// Where the address is. Every answer carries it, with or without a key; its
     /// finer members, from the region down, on every paid plan.
     public let location: Location?
@@ -364,6 +372,45 @@ public struct BitTorrentDetail: Sendable, Hashable {
     }
 }
 
+/// The bot that uses the address: its operator, the bots it serves or claimed
+/// to be, what they do, and how that is known.
+public struct BotDetail: Sendable, Hashable {
+    /// The bot operator's ID, or an empty string where no operator is known.
+    public let provider: String?
+    /// The operator's name, or an empty string where no operator is known.
+    public let providerName: String?
+    /// The bots the address serves, as their user agents name them (`Googlebot`,
+    /// `GPTBot`), in the order served; for an address that is not verified, the
+    /// bots it claimed to be. Empty where none is named.
+    public let agents: [String]?
+    /// What those bots do, such as `search_engine`, `ai_training`, `ai_search`,
+    /// `monitoring`, `scanner` or `webhook`, in the order served. Empty where
+    /// unknown.
+    public let categories: [String]?
+    /// Whether the operator vouches for the address, so the bots in `agents`
+    /// really are its.
+    public let verified: Bool?
+    /// `verified`, `declared` (it names itself a bot that cannot be verified),
+    /// `spoofed` (it claimed a bot whose operator vouches for other addresses) or
+    /// `undeclared` (it hides as a browser and behaves as automation).
+    public let identity: String?
+    /// How a verified address verified: `list`, `rdns` or `owner`; an empty
+    /// string when it is not verified.
+    public let verifiedBy: String?
+    /// `high`, `medium` or `low`.
+    public let confidence: String?
+    /// The first day the address was seen as such.
+    public let firstSeen: String?
+    /// The last day it was.
+    public let lastSeen: String?
+
+    public var isEmpty: Bool {
+        provider == nil && providerName == nil && agents == nil && categories == nil && verified == nil
+            && identity == nil && verifiedBy == nil && confidence == nil && firstSeen == nil
+            && lastSeen == nil
+    }
+}
+
 /// Where the address is. The first ten members are set whenever the object is,
 /// an empty string where not known; the rest, from `region` down, on every paid
 /// plan, and `nil` on Unlimited.
@@ -484,6 +531,7 @@ extension LookupResult {
         self.isWeb = body.isWeb
         self.isDnsResolver = body.isDnsResolver
         self.isBittorrent = body.isBittorrent
+        self.isBot = body.isBot
         self.vpn = try body.vpn.map { try VpnDetail($0.value1) }
         self.hosting = try body.hosting.map { try ClassDetail($0.value1) }
         self.relay = try body.relay.map { try ClassDetail($0.value1) }
@@ -500,6 +548,7 @@ extension LookupResult {
         self.web = body.web?.map(WebDetail.init)
         self.dnsResolver = body.dnsResolver.map { DnsResolverDetail($0.value1) }
         self.bittorrent = body.bittorrent.map { BitTorrentDetail($0.value1) }
+        self.bot = body.bot.map { BotDetail($0.value1) }
         self.location = body.location.map(Location.init)
         self.asn = body.asn.map(Asn.init)
         self.company = body.company.map(Company.init)
@@ -648,6 +697,22 @@ extension BitTorrentDetail {
     static let empty = BitTorrentDetail(
         verified: nil, idMatchesIp: nil, firstSeen: nil, lastSeen: nil, lastReachable: nil, daysSeen: nil,
         numPorts: nil, peakNumPorts: nil, indexer: nil, clients: nil,
+    )
+}
+
+extension BotDetail {
+    init(_ wire: Components.Schemas.BotDetail) {
+        self.init(
+            provider: wire.provider, providerName: wire.providerName, agents: wire.agents,
+            categories: wire.categories, verified: wire.verified, identity: wire.identity,
+            verifiedBy: wire.verifiedBy, confidence: wire.confidence, firstSeen: wire.firstSeen,
+            lastSeen: wire.lastSeen,
+        )
+    }
+
+    static let empty = BotDetail(
+        provider: nil, providerName: nil, agents: nil, categories: nil, verified: nil, identity: nil,
+        verifiedBy: nil, confidence: nil, firstSeen: nil, lastSeen: nil,
     )
 }
 

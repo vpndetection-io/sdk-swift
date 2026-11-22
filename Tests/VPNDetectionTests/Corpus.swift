@@ -266,6 +266,7 @@ enum Wire {
         "is_web": { $0.isWeb },
         "is_dns_resolver": { $0.isDnsResolver },
         "is_bittorrent": { $0.isBittorrent },
+        "is_bot": { $0.isBot },
         "trial_expired": { $0.trialExpired },
         "cap_reached": { $0.capReached },
     ]
@@ -290,6 +291,7 @@ enum Wire {
         "web": { $0.web.map { .array($0.map { .object($0.wireFields) }) } },
         "dns_resolver": { $0.dnsResolver.map { .object($0.wireFields) } },
         "bittorrent": { $0.bittorrent.map { .object($0.wireFields) } },
+        "bot": { $0.bot.map { .object($0.wireFields) } },
         "location": { $0.location.map { .object($0.wireFields) } },
         "asn": { $0.asn.map { .object($0.wireFields) } },
         "company": { $0.company.map { .object($0.wireFields) } },
@@ -443,6 +445,23 @@ extension BitTorrentDetail {
         peakNumPorts.map { fields["peak_num_ports"] = .int($0) }
         indexer.map { fields["indexer"] = .bool($0) }
         clients.map { fields["clients"] = .array($0.map { .string($0) }) }
+        return fields
+    }
+}
+
+extension BotDetail {
+    var wireFields: [String: JSONValue] {
+        var fields: [String: JSONValue] = [:]
+        provider.map { fields["provider"] = .string($0) }
+        providerName.map { fields["provider_name"] = .string($0) }
+        agents.map { fields["agents"] = .array($0.map { .string($0) }) }
+        categories.map { fields["categories"] = .array($0.map { .string($0) }) }
+        verified.map { fields["verified"] = .bool($0) }
+        identity.map { fields["identity"] = .string($0) }
+        verifiedBy.map { fields["verified_by"] = .string($0) }
+        confidence.map { fields["confidence"] = .string($0) }
+        firstSeen.map { fields["first_seen"] = .string($0) }
+        lastSeen.map { fields["last_seen"] = .string($0) }
         return fields
     }
 }

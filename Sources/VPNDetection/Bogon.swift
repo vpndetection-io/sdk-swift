@@ -62,11 +62,11 @@ extension LookupResult {
             isHosting: false, isRelay: false, isTor: false, isCdn: false,
             isResproxy: false, isDcproxy: false, isMobproxy: false, isPubproxy: false,
             isAnycast: false, isCarrier: false, isSatellite: false, isSsh: false, isSmtp: false,
-            isWeb: false, isDnsResolver: false, isBittorrent: false,
+            isWeb: false, isDnsResolver: false, isBittorrent: false, isBot: false,
             vpn: vpn, hosting: classDetail, relay: classDetail, tor: classDetail,
             cdn: classDetail, resproxy: proxy, dcproxy: proxy, mobproxy: proxy, pubproxy: pubproxy,
             carrier: .empty, satellite: .empty, ssh: .empty, smtp: .empty, web: [],
-            dnsResolver: .empty, bittorrent: .empty,
+            dnsResolver: .empty, bittorrent: .empty, bot: .empty,
             location: .empty, asn: .empty, company: .empty, hostname: "", abuse: .empty,
             trialExpired: nil, capReached: nil,
         )

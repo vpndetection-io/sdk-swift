@@ -2,6 +2,16 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 5.2.0 - 2026-11-22
+
+### Features
+
+- Read is_bot and the bot detail of an answer ([`352ad73`](https://github.com/vpndetection-io/sdk-swift/commit/352ad7327859e7c0887ab210bfd88df155d53bf5))
+
+### Fixes
+
+- Require the AS's country and RPKI status, as the API always sends them ([`af1ed76`](https://github.com/vpndetection-io/sdk-swift/commit/af1ed7648c403927321d9a7243aba09eeb7d43a4))
+
 ## 5.1.0 - 2026-11-21
 
 ### Features

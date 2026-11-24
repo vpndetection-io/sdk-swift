@@ -150,7 +150,7 @@ extension LookupResult {
             "smtp": smtp != nil, "web": web != nil, "dns_resolver": dnsResolver != nil,
             "bittorrent": bittorrent != nil, "bot": bot != nil, "location": location != nil,
             "asn": asn != nil, "company": company != nil, "hostname": hostname != nil,
-            "abuse": abuse != nil,
+            "abuse": abuse != nil, "user_agent": userAgent != nil,
             // A shared object's paid members are fields of their own: Unlimited
             // answers the country, a paid plan the city as well.
             "location.region": location?.region != nil,

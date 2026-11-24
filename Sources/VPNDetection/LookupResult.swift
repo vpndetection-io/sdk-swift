@@ -260,9 +260,9 @@ public struct SshDetail: Sendable, Hashable {
     public let hostKeyFp: String?
     /// A session was set up.
     public let sessionOk: Bool?
-    /// The first day it answered.
+    /// The first day it answered, as `YYYY-MM-DD`.
     public let firstSeen: String?
-    /// The last day it did.
+    /// The last day it did, as `YYYY-MM-DD`.
     public let lastSeen: String?
 
     public var isEmpty: Bool {
@@ -279,9 +279,9 @@ public struct SmtpDetail: Sendable, Hashable {
     public let banner: String?
     /// A session was set up.
     public let sessionOk: Bool?
-    /// The first day it answered.
+    /// The first day it answered, as `YYYY-MM-DD`.
     public let firstSeen: String?
-    /// The last day it did.
+    /// The last day it did, as `YYYY-MM-DD`.
     public let lastSeen: String?
 
     public var isEmpty: Bool {
@@ -315,9 +315,9 @@ public struct WebDetail: Sendable, Hashable {
     public let certBrowserTrusted: Bool
     /// The TLS version negotiated, empty without TLS.
     public let tlsVersion: String
-    /// The first day the port was open.
+    /// The first day the port was open, as `YYYY-MM-DD`.
     public let firstSeen: String
-    /// The last day it was.
+    /// The last day it was, as `YYYY-MM-DD`.
     public let lastSeen: String
 }
 
@@ -331,9 +331,9 @@ public struct DnsResolverDetail: Sendable, Hashable {
     public let rcode: Int?
     /// Its answer was right.
     public let answerCorrect: Bool?
-    /// The first day it answered.
+    /// The first day it answered, as `YYYY-MM-DD`.
     public let firstSeen: String?
-    /// The last day it did.
+    /// The last day it did, as `YYYY-MM-DD`.
     public let lastSeen: String?
 
     public var isEmpty: Bool {
@@ -348,9 +348,9 @@ public struct BitTorrentDetail: Sendable, Hashable {
     public let verified: Bool?
     /// A client here derived its node ID from the address (BEP 42).
     public let idMatchesIp: Bool?
-    /// The first day a client was seen here.
+    /// The first day a client was seen here, as `YYYY-MM-DD`.
     public let firstSeen: String?
-    /// The last day.
+    /// The last day, as `YYYY-MM-DD`.
     public let lastSeen: String?
     /// The last day one answered, empty when none did.
     public let lastReachable: String?
@@ -399,9 +399,9 @@ public struct BotDetail: Sendable, Hashable {
     public let verifiedBy: String?
     /// `high`, `medium` or `low`.
     public let confidence: String?
-    /// The first day the address was seen as such.
+    /// The first day the address was seen as such, as `YYYY-MM-DD`.
     public let firstSeen: String?
-    /// The last day it was.
+    /// The last day it was, as `YYYY-MM-DD`.
     public let lastSeen: String?
 
     public var isEmpty: Bool {
@@ -543,12 +543,12 @@ extension LookupResult {
         self.pubproxy = try body.pubproxy.map { try PubproxyDetail($0.value1) }
         self.carrier = body.carrier.map { CarrierDetail($0.value1) }
         self.satellite = body.satellite.map { SatelliteDetail($0.value1) }
-        self.ssh = body.ssh.map { SshDetail($0.value1) }
-        self.smtp = body.smtp.map { SmtpDetail($0.value1) }
-        self.web = body.web?.map(WebDetail.init)
-        self.dnsResolver = body.dnsResolver.map { DnsResolverDetail($0.value1) }
-        self.bittorrent = body.bittorrent.map { BitTorrentDetail($0.value1) }
-        self.bot = body.bot.map { BotDetail($0.value1) }
+        self.ssh = try body.ssh.map { try SshDetail($0.value1) }
+        self.smtp = try body.smtp.map { try SmtpDetail($0.value1) }
+        self.web = try body.web?.map(WebDetail.init)
+        self.dnsResolver = try body.dnsResolver.map { try DnsResolverDetail($0.value1) }
+        self.bittorrent = try body.bittorrent.map { try BitTorrentDetail($0.value1) }
+        self.bot = try body.bot.map { try BotDetail($0.value1) }
         self.location = body.location.map(Location.init)
         self.asn = body.asn.map(Asn.init)
         self.company = body.company.map(Company.init)
@@ -629,10 +629,10 @@ extension SatelliteDetail {
 }
 
 extension SshDetail {
-    init(_ wire: Components.Schemas.SshDetail) {
-        self.init(
+    init(_ wire: Components.Schemas.SshDetail) throws {
+        try self.init(
             port: wire.port, banner: wire.banner, hostKeyFp: wire.hostKeyFp, sessionOk: wire.sessionOk,
-            firstSeen: wire.firstSeen, lastSeen: wire.lastSeen,
+            firstSeen: fullDate(wire.firstSeen, "ssh.first_seen"), lastSeen: fullDate(wire.lastSeen, "ssh.last_seen"),
         )
     }
 
@@ -642,10 +642,10 @@ extension SshDetail {
 }
 
 extension SmtpDetail {
-    init(_ wire: Components.Schemas.SmtpDetail) {
-        self.init(
-            port: wire.port, banner: wire.banner, sessionOk: wire.sessionOk, firstSeen: wire.firstSeen,
-            lastSeen: wire.lastSeen,
+    init(_ wire: Components.Schemas.SmtpDetail) throws {
+        try self.init(
+            port: wire.port, banner: wire.banner, sessionOk: wire.sessionOk,
+            firstSeen: fullDate(wire.firstSeen, "smtp.first_seen"), lastSeen: fullDate(wire.lastSeen, "smtp.last_seen"),
         )
     }
 
@@ -653,7 +653,7 @@ extension SmtpDetail {
 }
 
 extension WebDetail {
-    init(_ wire: Components.Schemas.WebDetail) {
+    init(_ wire: Components.Schemas.WebDetail) throws {
         self.port = wire.port
         self.tlsOk = wire.tlsOk
         self.sessionOk = wire.sessionOk
@@ -666,16 +666,17 @@ extension WebDetail {
         self.certIssuerDn = wire.certIssuerDn
         self.certBrowserTrusted = wire.certBrowserTrusted
         self.tlsVersion = wire.tlsVersion
-        self.firstSeen = wire.firstSeen
-        self.lastSeen = wire.lastSeen
+        self.firstSeen = try requiredDate(wire.firstSeen, "web.first_seen")
+        self.lastSeen = try requiredDate(wire.lastSeen, "web.last_seen")
     }
 }
 
 extension DnsResolverDetail {
-    init(_ wire: Components.Schemas.DnsResolverDetail) {
-        self.init(
+    init(_ wire: Components.Schemas.DnsResolverDetail) throws {
+        try self.init(
             port: wire.port, recursionAvailable: wire.recursionAvailable, rcode: wire.rcode,
-            answerCorrect: wire.answerCorrect, firstSeen: wire.firstSeen, lastSeen: wire.lastSeen,
+            answerCorrect: wire.answerCorrect, firstSeen: fullDate(wire.firstSeen, "dns_resolver.first_seen"),
+            lastSeen: fullDate(wire.lastSeen, "dns_resolver.last_seen"),
         )
     }
 
@@ -685,10 +686,11 @@ extension DnsResolverDetail {
 }
 
 extension BitTorrentDetail {
-    init(_ wire: Components.Schemas.BitTorrentDetail) {
-        self.init(
-            verified: wire.verified, idMatchesIp: wire.idMatchesIp, firstSeen: wire.firstSeen,
-            lastSeen: wire.lastSeen, lastReachable: wire.lastReachable, daysSeen: wire.daysSeen,
+    init(_ wire: Components.Schemas.BitTorrentDetail) throws {
+        try self.init(
+            verified: wire.verified, idMatchesIp: wire.idMatchesIp,
+            firstSeen: fullDate(wire.firstSeen, "bittorrent.first_seen"),
+            lastSeen: fullDate(wire.lastSeen, "bittorrent.last_seen"), lastReachable: wire.lastReachable, daysSeen: wire.daysSeen,
             numPorts: wire.numPorts, peakNumPorts: wire.peakNumPorts, indexer: wire.indexer,
             clients: wire.clients,
         )
@@ -701,12 +703,12 @@ extension BitTorrentDetail {
 }
 
 extension BotDetail {
-    init(_ wire: Components.Schemas.BotDetail) {
-        self.init(
+    init(_ wire: Components.Schemas.BotDetail) throws {
+        try self.init(
             provider: wire.provider, providerName: wire.providerName, agents: wire.agents,
             categories: wire.categories, verified: wire.verified, identity: wire.identity,
-            verifiedBy: wire.verifiedBy, confidence: wire.confidence, firstSeen: wire.firstSeen,
-            lastSeen: wire.lastSeen,
+            verifiedBy: wire.verifiedBy, confidence: wire.confidence,
+            firstSeen: fullDate(wire.firstSeen, "bot.first_seen"), lastSeen: fullDate(wire.lastSeen, "bot.last_seen"),
         )
     }
 
@@ -819,8 +821,15 @@ extension AbuseContact {
 // A `format: date` member reaches the generated type as a plain string, so
 // nothing has checked it: `tomorrow` and 30 February came back as served.
 private func fullDate(_ value: String?, _ member: String) throws -> String? {
-    guard let value, !RFC3339.isFullDate(value) else {
-        return value
+    guard let value else {
+        return nil
     }
-    throw VPNDetectionError.unreadable("\(member) \(value.debugDescription) is no YYYY-MM-DD date")
+    return try requiredDate(value, member)
+}
+
+private func requiredDate(_ value: String, _ member: String) throws -> String {
+    guard RFC3339.isFullDate(value) else {
+        throw VPNDetectionError.unreadable("\(member) \(value.debugDescription) is no YYYY-MM-DD date")
+    }
+    return value
 }

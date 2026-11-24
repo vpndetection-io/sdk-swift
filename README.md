@@ -45,7 +45,7 @@ print(result.asn?.name)             // who runs the announcing network
 
 ### With an API key
 
-Every paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider (its ID and its name), confidence and last-seen detail behind each flag; `is_carrier`, `is_satellite`, `is_ssh`, `is_smtp`, `is_web`, `is_dns_resolver` and `is_bittorrent`, with the detail behind each (`web` is a list, a row per port that answered); `bot`, the detail behind `is_bot`: whose bot it is, the bots it serves and what they do, and whether its operator vouches for the address; the `company` using the address and its `abuse` contact; and `location` down to the city, postal code and coordinates. The plans differ only in how many lookups they include, and a free account tries every field. Create a key in the [console](https://app.vpndetection.io), then pass it in:
+Every paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider (its ID and its name), confidence and last-seen detail behind each flag; `is_carrier`, `is_satellite`, `is_ssh`, `is_smtp`, `is_web`, `is_dns_resolver` and `is_bittorrent`, with the detail behind each (`web` is a list, a row per port that answered); `bot`, the detail behind `is_bot`: whose bot it is, the bots it serves and what they do, and whether its operator vouches for the address; `user_agent`, when you send the user agent of the request you are deciding on ([below](#a-visitors-user-agent)); the `company` using the address and its `abuse` contact; and `location` down to the city, postal code and coordinates. The plans differ only in how many lookups they include, and a free account tries every field. Create a key in the [console](https://app.vpndetection.io), then pass it in:
 
 ```swift
 let client = VPNDetectionClient(apiKey: ProcessInfo.processInfo.environment["VPNDETECTION_API_KEY"]!)
@@ -70,6 +70,27 @@ print(result.ip)   // the address we saw this call come from
 ```
 
 Same answer `lookup` would give for that address, and the same cost against your allowance. It is deliberately not cached: which address you are is the whole question, and a machine that moves between networks would otherwise be told where it used to be.
+
+### A visitor's user agent
+
+Pass the `User-Agent` header of the request you are deciding on, and with every field the answer carries `userAgent`: the agent it names, what kind of client that is, and whether this address bears it out. A request claiming to be Googlebot from an address Google does not vouch for comes back `spoofed`:
+
+```swift
+let result = try await client.lookup(visitorIP, userAgent: userAgentHeader)
+if let ua = result.userAgent {
+    print(ua.agent)                  // Googlebot
+    print(ua.kind)                   // bot
+    print(ua.verdict == .verified)   // true: Google vouches for this address
+}
+```
+
+`verdict` is `.verified`, `.spoofed`, `.unverifiable` (a bot nothing published can confirm) or `.notBot` (a browser, an app or a script), and reads a value the API adds later as itself ([below](#a-value-the-api-adds)). `myIP(userAgent:)` takes one too, and a batch takes each address's, keyed by the address as you list it:
+
+```swift
+let results = try await client.lookupBatch(ips, userAgents: ["66.249.66.1": googlebotHeader])
+```
+
+An answer is cached per address and user agent, so the same address with another agent, or with none, is a request of its own. An empty user agent is none, and one longer than 1024 characters is sent and cut there by the API. A private or reserved address is answered locally and carries no `userAgent`. The agent is never kept, and nothing sent with a lookup feeds our data.
 
 ### Your plan and usage
 
@@ -290,7 +311,7 @@ result.capReached == true    // a paid key past its overage cap
 
 ### A value the API adds
 
-A plan's tier, a database's standing and license type, a format and a download's outcome are each a struct with a constant per value this release knows. From 5.0.0, a value the API adds later reads as itself rather than failing the call, so compare with `==` and keep a `default:` in a `switch`:
+A plan's tier, a database's standing and license type, a format, a download's outcome and a user agent's verdict are each a struct with a constant per value this release knows. From 5.0.0, a value the API adds later reads as itself rather than failing the call, so compare with `==` and keep a `default:` in a `switch`:
 
 ```swift
 if database.standing == .licensed { /* download it */ }

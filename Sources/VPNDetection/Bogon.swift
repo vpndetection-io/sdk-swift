@@ -44,7 +44,8 @@ extension LookupResult {
     /// `web` an empty list, `hostname` an empty string, and a location, AS,
     /// company and abuse contact of empty strings and zeros.
     ///
-    /// `isBogon` is true, as the API answers reserved space. Note this is deliberately the WIDEST shape regardless
+    /// `isBogon` is true, as the API answers reserved space. `userAgent` is nil
+    /// whatever the lookup sent: no request is made to judge it. Note this is deliberately the WIDEST shape regardless
     /// of your plan, so do not infer which fields your plan includes from it.
     static func bogon(_ ip: String) -> LookupResult {
         let vpn = VpnDetail(provider: nil, lastSeen: nil, confidence: nil, method: nil, providerName: nil)
@@ -68,7 +69,7 @@ extension LookupResult {
             carrier: .empty, satellite: .empty, ssh: .empty, smtp: .empty, web: [],
             dnsResolver: .empty, bittorrent: .empty, bot: .empty,
             location: .empty, asn: .empty, company: .empty, hostname: "", abuse: .empty,
-            trialExpired: nil, capReached: nil,
+            userAgent: nil, trialExpired: nil, capReached: nil,
         )
     }
 }

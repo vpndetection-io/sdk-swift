@@ -11,3 +11,4 @@ typeOverrides:
     Database: WireDatabase
     Download: WireDownload
     Asn: WireAsn
+    UserAgentVerdict: WireUserAgentVerdict

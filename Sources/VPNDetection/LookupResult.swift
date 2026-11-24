@@ -100,6 +100,10 @@ public struct LookupResult: Sendable, Hashable {
     public let hostname: String?
     /// Where to report abuse from the address. Every paid plan.
     public let abuse: AbuseContact?
+    /// The agent the lookup's `userAgent` names and whether this address bears
+    /// it out, when one was sent, on a paid plan or the trial. `nil` when none
+    /// was, and on a bogon, which is answered locally.
+    public let userAgent: UserAgentVerdict?
     /// On answers to a key on the free plan only: `false` while its organization's
     /// trial of every field lasts, `true` once the answer has Unlimited's.
     public let trialExpired: Bool?
@@ -411,6 +415,42 @@ public struct BotDetail: Sendable, Hashable {
     }
 }
 
+/// What a lookup's user agent says the client is, and whether the address bears
+/// it out.
+public struct UserAgentVerdict: Sendable, Hashable {
+    /// The agent the user agent names, such as `Googlebot` or `Chrome`;
+    /// `Unknown` where it names none.
+    public let agent: String
+    /// What kind of client the user agent says it is: `browser`, `inapp`,
+    /// `automation`, `bot`, `ai-bot`, `http-client` or `unknown`.
+    public let kind: String
+    /// Whether the address bears the agent out.
+    public let verdict: Verdict
+
+    /// Whether the address bears a user agent out. A value the API adds after
+    /// this release reads as itself, with ``Vocabulary/isKnown`` false.
+    public struct Verdict: Vocabulary {
+        public let rawValue: String
+
+        public init(rawValue: String) {
+            self.rawValue = rawValue
+        }
+
+        /// The agent's operator vouches for this address as it.
+        public static let verified = Verdict(rawValue: "verified")
+        /// The operator of a bot that publishes its addresses, or whose
+        /// registered space it uses, does not vouch for this one, or this address
+        /// posed as the bot before.
+        public static let spoofed = Verdict(rawValue: "spoofed")
+        /// A bot no published list or registered space can confirm.
+        public static let unverifiable = Verdict(rawValue: "unverifiable")
+        /// A browser, an app or a script.
+        public static let notBot = Verdict(rawValue: "not_bot")
+
+        public static let known: [Verdict] = [.verified, .spoofed, .unverifiable, .notBot]
+    }
+}
+
 /// Where the address is. The first ten members are set whenever the object is,
 /// an empty string where not known; the rest, from `region` down, on every paid
 /// plan, and `nil` on Unlimited.
@@ -554,6 +594,7 @@ extension LookupResult {
         self.company = body.company.map(Company.init)
         self.hostname = body.hostname
         self.abuse = body.abuse.map(AbuseContact.init)
+        self.userAgent = try body.userAgent.map { try UserAgentVerdict($0.value1) }
         self.trialExpired = body.trialExpired
         self.capReached = body.capReached
     }
@@ -784,6 +825,23 @@ struct WireAsn: Codable, Hashable, Sendable {
         case asn, name, domain, type, prefix, country
         case rpkiStatus = "rpki_status"
     }
+}
+
+extension UserAgentVerdict {
+    init(_ wire: WireUserAgentVerdict) throws {
+        self.agent = wire.agent
+        self.kind = wire.kind
+        self.verdict = try vocabulary(wire.verdict, "user_agent.verdict")
+    }
+}
+
+/// The spec's `UserAgentVerdict`, read in place of the generated type (the
+/// config's `typeOverrides`), whose closed `verdict` would fail the whole call
+/// on a value the API adds. Every member is required, as the spec lists them.
+struct WireUserAgentVerdict: Codable, Hashable, Sendable {
+    var agent: String
+    var kind: String
+    var verdict: String
 }
 
 extension Company {

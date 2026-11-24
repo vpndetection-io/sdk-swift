@@ -297,6 +297,11 @@ enum Wire {
         "company": { $0.company.map { .object($0.wireFields) } },
         "hostname": { $0.hostname.map { .string($0) } },
         "abuse": { $0.abuse.map { .object($0.wireFields) } },
+        "user_agent": {
+            $0.userAgent.map {
+                .object(["agent": .string($0.agent), "kind": .string($0.kind), "verdict": .string($0.verdict.rawValue)])
+            }
+        },
     ]
 
     static func isKnownKey(_ wire: String) -> Bool {

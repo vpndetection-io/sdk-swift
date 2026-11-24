@@ -2,6 +2,16 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 5.3.0 - 2026-11-24
+
+### Features
+
+- Send a visitor's user agent with a lookup or a batch ([`9bf659a`](https://github.com/vpndetection-io/sdk-swift/commit/9bf659a04ff420a842266c73aa34d74936be94b1))
+
+### Fixes
+
+- Refuse a seen day that is no date in six details, and re-pin the spec to 2026.11.23 ([`70b9a63`](https://github.com/vpndetection-io/sdk-swift/commit/70b9a636ceb20f5d0012f64ab15233ab98e5a302))
+
 ## 5.2.0 - 2026-11-22
 
 ### Features

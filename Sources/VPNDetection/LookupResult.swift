@@ -30,28 +30,28 @@ public struct LookupResult: Sendable, Hashable {
     public let isDcproxy: Bool?
     public let isMobproxy: Bool?
     /// Whether a public proxy, one anyone can connect through, listens on the
-    /// address or sends its traffic out from it. On every paid plan.
+    /// address or sends its traffic out from it. On a paid plan.
     public let isPubproxy: Bool?
     /// Whether the address is announced from many places at once, as a public
     /// DNS resolver's or a CDN's edge is. Every answer carries it, with or
     /// without a key.
     public let isAnycast: Bool?
     /// Whether the address is a mobile carrier's, where many phones can share
-    /// one address. On every paid plan.
+    /// one address. On a paid plan.
     public let isCarrier: Bool?
-    /// Whether the address is a satellite operator's. On every paid plan.
+    /// Whether the address is a satellite operator's. On a paid plan.
     public let isSatellite: Bool?
-    /// Whether an SSH server answered on the address. On every paid plan.
+    /// Whether an SSH server answered on the address. On a paid plan.
     public let isSsh: Bool?
-    /// Whether a mail server answered on the address. On every paid plan.
+    /// Whether a mail server answered on the address. On a paid plan.
     public let isSmtp: Bool?
-    /// Whether a web server answered on the address, on port 80 or 443. On
-    /// every paid plan.
+    /// Whether a web server answered on the address, on port 80 or 443. On a
+    /// paid plan.
     public let isWeb: Bool?
-    /// Whether an open DNS resolver answered on the address. On every paid plan.
+    /// Whether an open DNS resolver answered on the address. On a paid plan.
     public let isDnsResolver: Bool?
     /// Whether a BitTorrent client was seen on the address in the last 90 days.
-    /// On every paid plan.
+    /// On a paid plan.
     public let isBittorrent: Bool?
     /// Whether an automated client uses the address, such as a search engine's
     /// or an AI company's crawler, an uptime monitor, an internet scanner or a
@@ -66,39 +66,39 @@ public struct LookupResult: Sendable, Hashable {
     public let resproxy: ProxyDetail?
     public let dcproxy: ProxyDetail?
     public let mobproxy: ProxyDetail?
-    /// Detail for `isPubproxy`. Empty when it is false. Every paid plan.
+    /// Detail for `isPubproxy`. Empty when it is false. On a paid plan.
     public let pubproxy: PubproxyDetail?
-    /// Detail for `isCarrier`. Empty when it is false. Every paid plan.
+    /// Detail for `isCarrier`. Empty when it is false. On a paid plan.
     public let carrier: CarrierDetail?
-    /// Detail for `isSatellite`. Empty when it is false. Every paid plan.
+    /// Detail for `isSatellite`. Empty when it is false. On a paid plan.
     public let satellite: SatelliteDetail?
-    /// Detail for `isSsh`. Empty when it is false. Every paid plan.
+    /// Detail for `isSsh`. Empty when it is false. On a paid plan.
     public let ssh: SshDetail?
-    /// Detail for `isSmtp`. Empty when it is false. Every paid plan.
+    /// Detail for `isSmtp`. Empty when it is false. On a paid plan.
     public let smtp: SmtpDetail?
     /// Detail for `isWeb`: a row per port that answered, lowest first, and an
-    /// empty list when it is false. Every paid plan.
+    /// empty list when it is false. On a paid plan.
     public let web: [WebDetail]?
-    /// Detail for `isDnsResolver`. Empty when it is false. Every paid plan.
+    /// Detail for `isDnsResolver`. Empty when it is false. On a paid plan.
     public let dnsResolver: DnsResolverDetail?
-    /// Detail for `isBittorrent`. Empty when it is false. Every paid plan.
+    /// Detail for `isBittorrent`. Empty when it is false. On a paid plan.
     public let bittorrent: BitTorrentDetail?
     /// Detail for `isBot`: whose bot uses the address, what it does and whether
-    /// its operator vouches for the address. Empty when it is false. Every paid
+    /// its operator vouches for the address. Empty when it is false. On a paid
     /// plan.
     public let bot: BotDetail?
     /// Where the address is. Every answer carries it, with or without a key; its
-    /// finer members, from the region down, on every paid plan.
+    /// finer members, from the region down, on a paid plan.
     public let location: Location?
     /// The AS announcing the address. Every answer carries it, with or without
     /// a key.
     public let asn: Asn?
-    /// Who uses the address. Every paid plan.
+    /// Who uses the address. On a paid plan.
     public let company: Company?
     /// The name the address's reverse DNS (PTR) record points to, or an empty
     /// string when it has none. Every answer carries it, with or without a key.
     public let hostname: String?
-    /// Where to report abuse from the address. Every paid plan.
+    /// Where to report abuse from the address. On a paid plan.
     public let abuse: AbuseContact?
     /// The agent the lookup's `userAgent` names and whether this address bears
     /// it out, when one was sent, on a paid plan or the trial. `nil` when none
@@ -452,7 +452,7 @@ public struct UserAgentVerdict: Sendable, Hashable {
 }
 
 /// Where the address is. The first ten members are set whenever the object is,
-/// an empty string where not known; the rest, from `region` down, on every paid
+/// an empty string where not known; the rest, from `region` down, on a paid
 /// plan, and `nil` on Unlimited.
 public struct Location: Sendable, Hashable {
     /// The continent code, e.g. `EU`.

@@ -45,7 +45,7 @@ print(result.asn?.name)             // who runs the announcing network
 
 ### With an API key
 
-Every paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider (its ID and its name), confidence and last-seen detail behind each flag; `is_carrier`, `is_satellite`, `is_ssh`, `is_smtp`, `is_web`, `is_dns_resolver` and `is_bittorrent`, with the detail behind each (`web` is a list, a row per port that answered); `bot`, the detail behind `is_bot`: whose bot it is, the bots it serves and what they do, and whether its operator vouches for the address; `user_agent`, when you send the user agent of the request you are deciding on ([below](#a-visitors-user-agent)); the `company` using the address and its `abuse` contact; and `location` down to the city, postal code and coordinates. The plans differ only in how many lookups they include, and a free account tries every field. Create a key in the [console](https://app.vpndetection.io), then pass it in:
+A paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider (its ID and its name), confidence and last-seen detail behind each flag; `is_carrier`, `is_satellite`, `is_ssh`, `is_smtp`, `is_web`, `is_dns_resolver` and `is_bittorrent`, with the detail behind each (`web` is a list, a row per port that answered); `bot`, the detail behind `is_bot`: whose bot it is, the bots it serves and what they do, and whether its operator vouches for the address; `user_agent`, when you send the user agent of the request you are deciding on ([below](#a-visitors-user-agent)); the `company` using the address and its `abuse` contact; and `location` down to the city, postal code and coordinates. Its quotas differ only in how many lookups they include, and a free account tries every field. Create a key in the [console](https://app.vpndetection.io), then pass it in:
 
 ```swift
 let client = VPNDetectionClient(apiKey: ProcessInfo.processInfo.environment["VPNDETECTION_API_KEY"]!)
@@ -96,8 +96,8 @@ An answer is cached per address and user agent, so the same address with another
 
 ```swift
 let acct = try await client.myEntitlement()
-print(acct.plan.name)         // Max, what to show
-print(acct.plan.key)          // max, what to compare against
+print(acct.plan.name)         // Data, what to show
+print(acct.plan.key)          // data_4, what to compare against
 print(acct.usage.requests)    // 580
 print(acct.usage.windowEnd)   // when the allowance resets
 ```

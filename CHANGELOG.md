@@ -2,6 +2,14 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 5.3.1 - 2026-11-25
+
+### Fixes
+
+- README: one paid plan, Data; the entitlement example names it ([`becb133`](https://github.com/vpndetection-io/sdk-swift/commit/becb133e1c5fc7986e8f5559a6a3b3fb4c24d6e6))
+- Spec 2026.11.25: doc comments name a paid plan, the entitlement example the Data plan ([`1d76b96`](https://github.com/vpndetection-io/sdk-swift/commit/1d76b963944f8a2e28f3794c02f7f87589760b08))
+- Doc comments: a field is on a paid plan, and the plan key example is data_4 ([`e74534d`](https://github.com/vpndetection-io/sdk-swift/commit/e74534ddf393d497f00a69ae77d7721deae251e6))
+
 ## 5.3.0 - 2026-11-24
 
 ### Features

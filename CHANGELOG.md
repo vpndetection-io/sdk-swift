@@ -2,6 +2,12 @@
 
 What each release changed for you, newest first. Each line is a commit's summary, linked to its full description and diff. Releases before 4.3.2 are described by their release commits.
 
+## 5.4.0 - 2026-11-27
+
+### Features
+
+- Read a keyless answer without the AS's type ([`7080bfd`](https://github.com/vpndetection-io/sdk-swift/commit/7080bfd37084e8278a3840e8f4f9a7626a5f3b62))
+
 ## 5.3.1 - 2026-11-25
 
 ### Fixes

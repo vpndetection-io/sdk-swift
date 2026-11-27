@@ -30,7 +30,7 @@ Requires Swift 6.1 or newer, and macOS 13, iOS 16, tvOS 16, watchOS 9 or visionO
 
 ## Usage
 
-**No API key needed to start.** Unlimited, the free plan, answers `ip`, `is_vpn`, Tor and relay detection, `is_bot` (whether an automated client, such as a crawler, uses the address), `is_anycast`, `hostname` (the reverse DNS name), `location` to the country and `asn` with the AS's country and RPKI status, with no daily or monthly cap, with a key or without one.
+**No API key needed to start.** Unlimited, the free plan, answers `ip`, `is_vpn`, Tor and relay detection, `is_anycast`, `hostname` (the reverse DNS name), `location` to the country and `asn` with the AS's country and RPKI status, with no daily or monthly cap, with a key or without one.
 
 ```swift
 import VPNDetection
@@ -45,7 +45,7 @@ print(result.asn?.name)             // who runs the announcing network
 
 ### With an API key
 
-A paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider (its ID and its name), confidence and last-seen detail behind each flag; `is_carrier`, `is_satellite`, `is_ssh`, `is_smtp`, `is_web`, `is_dns_resolver` and `is_bittorrent`, with the detail behind each (`web` is a list, a row per port that answered); `bot`, the detail behind `is_bot`: whose bot it is, the bots it serves and what they do, and whether its operator vouches for the address; `user_agent`, when you send the user agent of the request you are deciding on ([below](#a-visitors-user-agent)); the `company` using the address and its `abuse` contact; and `location` down to the city, postal code and coordinates. Its quotas differ only in how many lookups they include, and a free account tries every field. Create a key in the [console](https://app.vpndetection.io), then pass it in:
+A paid plan answers every field: `is_hosting`, `is_cdn` and the four proxy flags as well, and the provider (its ID and its name), confidence and last-seen detail behind each flag; `is_carrier`, `is_satellite`, `is_ssh`, `is_smtp`, `is_web`, `is_dns_resolver` and `is_bittorrent`, with the detail behind each (`web` is a list, a row per port that answered); `is_bot`, whether an automated client, such as a crawler, uses the address, and `bot`, the detail behind it: whose bot it is, the bots it serves and what they do, and whether its operator vouches for the address; the `type` of the AS (`asn.type`); `user_agent`, when you send the user agent of the request you are deciding on ([below](#a-visitors-user-agent)); the `company` using the address and its `abuse` contact; and `location` down to the city, postal code and coordinates. Its quotas differ only in how many lookups they include, and a free account tries every field. Create a key in the [console](https://app.vpndetection.io), then pass it in:
 
 ```swift
 let client = VPNDetectionClient(apiKey: ProcessInfo.processInfo.environment["VPNDETECTION_API_KEY"]!)
@@ -299,7 +299,7 @@ Each redirect URI must be https on a public host name, or http on a loopback add
 
 ### Absent is not false
 
-Unlimited leaves out `isHosting`, `isCdn`, the four proxy flags and the carrier, satellite, SSH, SMTP, web, DNS resolver and BitTorrent flags, of the detail behind each flag it answers only Tor's and relay's, and it leaves out `company`, `abuse` and the finer `location` members, from `region` down; a free-plan key's answer carries `trialExpired`, true once its trial is spent, and a paid key's carries `capReached`, true once its organization's overage cap is reached and the answer has Unlimited's. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no".
+Unlimited leaves out `isHosting`, `isCdn`, the four proxy flags, `isBot` and the carrier, satellite, SSH, SMTP, web, DNS resolver and BitTorrent flags, of the detail behind each flag it answers only Tor's and relay's, and it leaves out `company`, `abuse` and the finer `location` members, from `region` down; a free-plan key's answer carries `trialExpired`, true once its trial is spent, and a paid key's carries `capReached`, true once its organization's overage cap is reached and the answer has Unlimited's. Every member but `ip` and `isVpn` is `Optional`, where `nil` means "not in your plan" rather than "checked, and no". The one exception is the AS's `type`, a paid plan's member of an `Asn` that Unlimited's answer leaves out: `asn?.type` is a `String`, and reads empty there.
 
 ```swift
 result.isHosting ?? false    // when you only want the flag

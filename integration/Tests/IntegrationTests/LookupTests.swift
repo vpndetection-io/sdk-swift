@@ -27,6 +27,21 @@ struct LookupTests {
         print("testing against \(staging.absoluteString)")
     }
 
+    // The AS's type and is_bot are a paid plan's: the API serves them to an
+    // unauthenticated lookup while it still does and stops later, so nothing here
+    // requires either, and the answer has to read both ways.
+    @Test("a lookup without a key reads its AS whether or not the type is served")
+    func keylessAsnReadsWithOrWithoutItsType() async throws {
+        let fixture = try await Answers.shared.fixture(for: .unauth)
+
+        let asn = try #require(fixture.result.asn, "an Unlimited answer carries the AS")
+        #expect(asn.asn != 0, "the probe address is announced")
+        #expect(asn.name.isEmpty == false)
+        // Empty where the API leaves the member out, a kind where it serves it.
+        let served = String(describing: fixture.result.isBot)
+        print("asn.type of the keyless answer: \(asn.type.debugDescription), is_bot: \(served)")
+    }
+
     @Test("a free-plan key reaches the wire and its answer keeps the shape", Tier.trial.needsKey)
     func trialKeepsTheShape() async throws {
         assertServedByTier(try await Answers.shared.fixture(for: .trial))

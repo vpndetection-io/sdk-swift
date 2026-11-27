@@ -55,7 +55,7 @@ public struct LookupResult: Sendable, Hashable {
     public let isBittorrent: Bool?
     /// Whether an automated client uses the address, such as a search engine's
     /// or an AI company's crawler, an uptime monitor, an internet scanner or a
-    /// webhook sender. Every answer carries it, with or without a key.
+    /// webhook sender. On a paid plan.
     public let isBot: Bool?
 
     public let vpn: VpnDetail?
@@ -91,7 +91,7 @@ public struct LookupResult: Sendable, Hashable {
     /// finer members, from the region down, on a paid plan.
     public let location: Location?
     /// The AS announcing the address. Every answer carries it, with or without
-    /// a key.
+    /// a key; its `type` is a paid plan's.
     public let asn: Asn?
     /// Who uses the address. On a paid plan.
     public let company: Company?
@@ -500,7 +500,8 @@ public struct Asn: Sendable, Hashable {
     public let name: String
     /// The AS operator's own registrable domain.
     public let domain: String
-    /// `isp`, `hosting`, `education`, `government` or `business`.
+    /// `isp`, `hosting`, `education`, `government` or `business`. On a paid plan;
+    /// empty where the answer carries none, as Unlimited's does not.
     public let type: String
     /// The announced prefix covering the address, the most specific when
     /// several do.
@@ -809,9 +810,14 @@ extension Asn {
 }
 
 /// The spec's `Asn`, read in place of the generated type (the config's
-/// `typeOverrides`). Every member is required, as the spec lists them, so an
+/// `typeOverrides`). Every member the spec requires is required here, so an
 /// answer missing one, or carrying a null, is refused; the public `Asn` keeps
 /// `country` and `rpkiStatus` optional because 5.1.0 shipped them that way.
+///
+/// `type` is the exception since spec 2026.11.26: a paid plan's member, left out
+/// of an Unlimited answer. The public `Asn.type` stays a `String`, so an answer
+/// without it reads empty, while one that carries it is read as served and a
+/// `null` or another JSON type is refused as before.
 struct WireAsn: Codable, Hashable, Sendable {
     var asn: Int64
     var name: String
@@ -824,6 +830,18 @@ struct WireAsn: Codable, Hashable, Sendable {
     enum CodingKeys: String, CodingKey {
         case asn, name, domain, type, prefix, country
         case rpkiStatus = "rpki_status"
+    }
+
+    init(from decoder: any Decoder) throws {
+        let members = try decoder.container(keyedBy: CodingKeys.self)
+        asn = try members.decode(Int64.self, forKey: .asn)
+        name = try members.decode(String.self, forKey: .name)
+        domain = try members.decode(String.self, forKey: .domain)
+        // `decodeIfPresent` would read a served null as absent, which the spec never allowed.
+        type = members.contains(.type) ? try members.decode(String.self, forKey: .type) : ""
+        prefix = try members.decode(String.self, forKey: .prefix)
+        country = try members.decode(String.self, forKey: .country)
+        rpkiStatus = try members.decode(String.self, forKey: .rpkiStatus)
     }
 }
 

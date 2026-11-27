@@ -497,9 +497,14 @@ extension Location {
 extension Asn {
     var wireFields: [String: JSONValue] {
         var fields: [String: JSONValue] = [
-            "asn": .int(asn), "name": .string(name), "domain": .string(domain),
-            "type": .string(type), "prefix": .string(prefix),
+            "asn": .int(asn), "name": .string(name), "domain": .string(domain), "prefix": .string(prefix),
         ]
+        // `type` is a plain String that reads empty where the answer carries none
+        // (a paid plan's member), so an empty one is not told apart from absent.
+        // `ConformanceTests.readingAsnType` holds the corpus to the same reading.
+        if !type.isEmpty {
+            fields["type"] = .string(type)
+        }
         country.map { fields["country"] = .string($0) }
         rpkiStatus.map { fields["rpki_status"] = .string($0) }
         return fields

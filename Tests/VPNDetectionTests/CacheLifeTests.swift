@@ -3,8 +3,9 @@ import Testing
 
 @testable import VPNDetection
 
-/// A spent trial's or a reached cap's answer ends with a new UTC day or a raised
-/// cap, so it is cached for a minute at most rather than the client's TTL.
+/// A spent trial's or a reached cap's answer ends when the organization's plan
+/// changes or its cap is raised, so it is cached for a minute at most rather than
+/// the client's TTL.
 @Suite("Cache life")
 struct CacheLifeTests {
     static let answers: [String: StubTransport.Route] = [

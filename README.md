@@ -152,7 +152,7 @@ let client = VPNDetectionClient(options: .init(cache: .init(maxEntries: 50_000, 
 let clientNoCache = VPNDetectionClient(options: .init(cache: nil))
 ```
 
-An answer with `trialExpired` or `capReached` true is cached for a minute at most, so a renewed trial or a raised cap reaches you within a minute.
+An answer with `trialExpired` or `capReached` true is cached for a minute at most, so a plan change or a raised cap reaches you within a minute.
 
 ### Private and reserved addresses
 
